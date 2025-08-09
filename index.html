@@ -48,6 +48,128 @@
   .click{cursor:pointer}
 </style>
 </head>
+<script>
+    // === Firebase init (use full config from Firebase console) ===
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    appId: "YOUR_APP_ID",
+    // optional but fine to include:
+    // storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    // messagingSenderId: "1234567890",
+  };
+  firebase.initializeApp(firebaseConfig);
+  
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+  
+  // UI refs
+  const signInBtn = document.getElementById("signInBtn");
+  const signOutBtn = document.getElementById("signOutBtn");
+  const userEmailLbl = document.getElementById("userEmail");
+  
+  // Heuristic: use redirect on iOS/Safari; popup elsewhere
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const provider = new firebase.auth.GoogleAuthProvider();
+  
+  signInBtn?.addEventListener("click", async () => {
+    try {
+      if (isIOS) {
+        await auth.signInWithRedirect(provider);
+      } else {
+        await auth.signInWithPopup(provider);
+      }
+    } catch (e) {
+      console.error("Sign-in failed:", e);
+      alert("Sign-in failed: " + (e.message || e));
+    }
+  });
+  
+  signOutBtn?.addEventListener("click", async () => {
+    try { await auth.signOut(); } catch (e) {
+      console.error("Sign-out failed:", e);
+      alert("Sign-out failed: " + (e.message || e));
+    }
+  });
+  
+  // After redirect back from Google (iOS), surface any error
+  auth.getRedirectResult().catch(e => {
+    console.error("Redirect result error:", e);
+    alert("Sign-in error: " + (e.message || e));
+  });
+  
+  // Auth state listener -- load or clear UI
+  let currentUid = null;
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      currentUid = user.uid;
+      signInBtn.style.display = "none";
+      signOutBtn.style.display = "inline-block";
+      userEmailLbl.textContent = user.email || "";
+  
+      // Load from Firestore (your existing function)
+      await loadFromCloud(currentUid);
+  
+      // Re-render after cloud load
+      renderAll(); renderCalendar(); renderDayPane(todayKey);
+    } else {
+      currentUid = null;
+      signInBtn.style.display = "inline-block";
+      signOutBtn.style.display = "none";
+      userEmailLbl.textContent = "";
+    }
+  });
+  
+  // Helpers for user doc (per-user namespace)
+  const userDoc = (uid) => db.collection("users").doc(uid);
+  const dataDoc = (uid) => userDoc(uid).collection("data").doc("current");
+  
+  // Example load/save (call saveToCloudDebounced() after your local saves)
+  async function loadFromCloud(uid) {
+    try {
+      const snap = await dataDoc(uid).get();
+      if (snap.exists) {
+        const data = snap.data() || {};
+        profile = data.profile || profile;
+        goal    = data.goal    || goal;
+        logs    = data.logs    || logs;
+        weights = data.weights || weights;
+        save(LS.profile, profile);
+        save(LS.goal, goal);
+        save(LS.logs, logs);
+        save(LS.weights, weights);
+        // reflect in inputs
+        $("#sex").value = profile.sex; $("#age").value = profile.age;
+        $("#height").value = profile.heightCm; $("#weight").value = profile.weightKg;
+        $("#activity").value = profile.activity;
+        $("#startW").value = goal.startWeightKg; $("#targetW").value = goal.targetWeightKg;
+      }
+    } catch (e) {
+      console.error("loadFromCloud failed:", e);
+      alert("Could not load cloud data: " + (e.message || e));
+    }
+  }
+  
+  let saveTimer=null;
+  function saveToCloudDebounced(){
+    if (!currentUid) return;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveToCloudNow, 1000);
+  }
+  async function saveToCloudNow(){
+    if (!currentUid) return;
+    try {
+      await dataDoc(currentUid).set(
+        { profile, goal, logs, weights, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+    } catch (e) {
+      console.error("saveToCloud failed:", e);
+    }
+  }
+
+</script>
 <body>
 <div class="wrap">
   <header class="row">
@@ -482,4 +604,5 @@
 </script>
 </body>
 </html>
+
 
