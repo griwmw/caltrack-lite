@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>CalTrack (Lite)</title>
 <meta name="theme-color" content="#0f1115" />
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
 <style>
   :root { --bg:#0f1115; --card:#171923; --muted:#212433; --text:#e6e6e6; --accent:#5ee0a1; --red:#ff6b6b; --green:#5ee0a1; --gray:#8b8fa3; }
   *{box-sizing:border-box}
@@ -51,6 +54,13 @@
     <h1 style="margin:0">CalTrack — Diet & Workout</h1>
     <span class="tag">Saves to this device</span>
   </header>
+
+  <div class="row" style="margin:8px 0;">
+    <button class="btn" id="signInBtn" type="button">Sign in with Google</button>
+    <button class="btn" id="signOutBtn" type="button" style="display:none">Sign out</button>
+    <span class="small" id="userEmail" style="opacity:.8;margin-left:8px"></span>
+  </div>
+
 
   <nav class="tabs">
     <button class="btn" data-tab="dash" aria-selected="true" type="button">Dashboard</button>
@@ -472,3 +482,4 @@
 </script>
 </body>
 </html>
+
