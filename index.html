@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>CalTrack Lite</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <meta name="theme-color" content="#111111" />
+  <!-- Apple PWA tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="CalTrack" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+
+  <style>
+    :root { --bg:#0f1115; --card:#171923; --muted:#212433; --text:#e6e6e6; --accent:#5ee0a1; --warn:#ffad60; --danger:#ff6b6b; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; height:100%; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif; }
+    .wrap { max-width:980px; margin:0 auto; padding:16px; }
+    h1 { margin:0 0 8px; font-size:22px; }
+    .grid { display:grid; gap:12px; }
+    @media (min-width:860px){ .grid-2 { grid-template-columns:1fr 1fr; } }
+    .card { background:var(--card); border:1px solid #22263a; border-radius:14px; padding:12px; box-shadow:0 6px 18px rgba(0,0,0,.25); }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .muted { background:var(--muted); border-radius:12px; padding:8px 10px; font-size:14px; }
+    label { font-size:13px; opacity:.9; }
+    input, select, textarea, button { background:var(--muted); color:var(--text); border:1px solid #2b3048; border-radius:10px; padding:8px 10px; font-size:14px; }
+    textarea { width:100%; min-height:72px; resize:vertical; }
+    button { cursor:pointer; }
+    .btn { background:#2f3656; }
+    .btn-primary { background:var(--accent); color:#0b1a13; border-color:#4ecf93; }
+    .tag { padding:4px 8px; border-radius:999px; background:#2a2f4a; font-size:12px; }
+    .right { margin-left:auto; }
+    .kpi { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
+    .kpi .muted { text-align:center; }
+    .list { display:grid; gap:6px; }
+    .small { font-size:12px; opacity:.75; }
+    .spacer { height:8px; }
+    .progress { width:100%; height:10px; background:#232742; border-radius:999px; overflow:hidden; }
+    .progress>i { display:block; height:100%; background:var(--accent); width:0%; }
+    .tabs { display:flex; gap:8px; margin-bottom:8px; }
+    .tabs button[aria-selected="true"] { background:var(--accent); color:#0b1a13; border-color:#4ecf93; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="row">
+      <h1>CalTrack — Diet & Workout (Lite, no‑build)</h1>
+      <span class="tag">Offline • Local save • PWA</span>
+      <button id="installBtn" class="btn right">Install</button>
+    </header>
+
+    <nav class="tabs">
+      <button class="btn" data-tab="dash" aria-selected="true">Dashboard</button>
+      <button class="btn" data-tab="log">Daily Log</button>
+      <button class="btn" data-tab="profile">Profile & Goal</button>
+      <button class="btn" data-tab="calendar">Calendar</button>
+    </nav>
+
+    <section id="dash" class="grid grid-2">
+      <div class="card">
+        <h3>Metabolism</h3>
+        <div class="kpi">
+          <div class="muted">BMR: <b id="bmr">0</b> kcal</div>
+          <div class="muted">TDEE: <b id="tdee">0</b> kcal</div>
+          <div class="muted">Activity: <b id="activityLabel">moderate</b></div>
+        </div>
+        <div class="small">Mifflin–St Jeor + activity multiplier</div>
+      </div>
+
+      <div class="card">
+        <h3>Goal Progress</h3>
+        <div class="progress"><i id="goalBar"></i></div>
+        <div class="row small"><span id="goalPct">0%</span><span class="right"><span id="kgToGo">0</span> kg to go</span></div>
+      </div>
+
+      <div class="card" style="grid-column:1/-1">
+        <h3>Today Summary (<span id="todayKey"></span>)</h3>
+        <div class="kpi">
+          <div class="muted">Food: <b id="foodKcal">0</b> kcal</div>
+          <div class="muted">Steps: <b id="stepsVal">0</b> → <b id="stepKcal">0</b> kcal</div>
+          <div class="muted">Workouts: <b id="workoutKcal">0</b> kcal</div>
+        </div>
+        <div class="spacer"></div>
+        <div class="kpi">
+          <div class="muted">Extra Burn: <b id="burnedExtra">0</b> kcal</div>
+          <div class="muted">Burned Total: <b id="burnedTotal">0</b> kcal</div>
+          <div class="muted">Net (food − burned): <b id="netVal">0</b> kcal</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="log" hidden class="grid grid-2">
+      <div class="card">
+        <h3>Food (NLP-ish)</h3>
+        <textarea id="foodInput" placeholder="e.g., I ate 2 eggs and 300g chicken"></textarea>
+        <div class="row">
+          <button class="btn-primary" id="foodAdd">Add</button>
+          <button class="btn" id="foodClear">Clear</button>
+        </div>
+        <div class="list" id="foodList"></div>
+      </div>
+
+      <div class="card">
+        <h3>Workouts & Steps</h3>
+        <textarea id="workInput" placeholder="e.g., 30 min run, 20 min lifting"></textarea>
+        <div class="row">
+          <button class="btn-primary" id="workAdd">Add</button>
+          <button class="btn" id="workClear">Clear</button>
+        </div>
+        <div class="row">
+          <label>Steps</label>
+          <input id="stepsInput" type="number" min="0" value="0" style="width:120px" />
+          <span class="tag" id="stepsTag">≈ 0 kcal</span>
+        </div>
+        <div class="row">
+          <label>Extra burned kcal</label>
+          <input id="extraInput" type="number" min="0" value="0" style="width:120px" />
+        </div>
+        <div class="list" id="workList"></div>
+      </div>
+    </section>
+
+    <section id="profile" hidden class="grid grid-2">
+      <div class="card">
+        <h3>Profile</h3>
+        <div class="grid">
+          <div class="row">
+            <label>Sex</label>
+            <select id="sex"><option>male</option><option>female</option></select>
+          </div>
+          <div class="row"><label>Age</label><input id="age" type="number" min="1" value="20" /></div>
+          <div class="row"><label>Height (cm)</label><input id="height" type="number" min="50" value="170" /></div>
+          <div class="row"><label>Weight (kg)</label><input id="weight" type="number" min="20" value="70" /></div>
+          <div class="row">
+            <label>Activity</label>
+            <select id="activity">
+              <option value="sedentary">sedentary</option>
+              <option value="light">light</option>
+              <option value="moderate" selected>moderate</option>
+              <option value="very">very</option>
+              <option value="athlete">athlete</option>
+            </select>
+          </div>
+          <div class="small">BMR: <span id="bmrMini">0</span> • TDEE: <span id="tdeeMini">0</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Goal</h3>
+        <div class="grid">
+          <div class="row"><label>Start (kg)</label><input id="startW" type="number" value="70" /></div>
+          <div class="row"><label>Target (kg)</label><input id="targetW" type="number" value="50" /></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="calendar" hidden class="grid grid-2">
+      <div class="card">
+        <h3>Pick a date</h3>
+        <input id="datePicker" type="date" />
+      </div>
+      <div class="card">
+        <h3>Day Details (<span id="dayKey"></span>)</h3>
+        <div class="grid">
+          <div class="muted">Food: <b id="calFoodDay">0</b> kcal</div>
+          <div class="muted">Burned: <b id="calBurnDay">0</b> kcal</div>
+          <div>
+            <div class="small"><b>Foods</b></div>
+            <div id="foodsDay" class="list"></div>
+            <div class="small"><b>Workouts</b></div>
+            <div id="worksDay" class="list"></div>
+            <div class="small"><b>Steps</b></div>
+            <div id="stepsDay" class="small"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="small" style="text-align:center; opacity:.7; margin-top:12px;">
+      Local-only MVP (no servers). Your data stays on this device. You can delete it by clearing Safari website data.
+    </footer>
+  </div>
+
+  <script>
+    // ---------- Storage helpers ----------
+    const LS = {
+      profile: "caltrack_profile_v1",
+      goal: "caltrack_goal_v1",
+      logs: "caltrack_logs_v1",
+    };
+    const load = (k, def) => { try{ const v = localStorage.getItem(k); return v? JSON.parse(v): def }catch{ return def } };
+    const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+
+    // ---------- Profile & Goal ----------
+    let profile = load(LS.profile, { sex:"male", age:20, heightCm:170, weightKg:70, activity:"moderate" });
+    let goal = load(LS.goal, { startWeightKg:70, targetWeightKg:50 });
+    let logs = load(LS.logs, {}); // { "YYYY-MM-DD": {foods:[],workouts:[],steps:0,burned:0} }
+
+    // ---------- Date helpers ----------
+    const fmt = d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+    let selectedDate = new Date();
+    let todayKey = fmt(selectedDate);
+
+    // ---------- BMR / TDEE ----------
+    const calcBMR = p => Math.round(10*p.weightKg + 6.25*p.heightCm - 5*p.age + (p.sex==="male"?5:-161));
+    const mult = act => ({sedentary:1.2, light:1.375, moderate:1.55, very:1.725, athlete:1.9})[act] || 1.55;
+
+    // ---------- NLP dictionaries ----------
+    const FOOD_KCAL = { steak:679, egg:78, banana:105, rice:206, chicken:335, salad:150, sandwich:300, apple:95, yogurt:150, noodles:400, sushi:250, pizza:285, cookie:160, milk:103, tea:0, coffee:2 };
+    const PER100 = { chicken:165, steak:250, rice:130, noodles:138, yogurt:63, banana:89, apple:52, cookie:502 };
+    const EX_MET = { "run":9.8, "jogging":7, "walk":3.3, "cycling":8, "swim":8, "yoga":3, "hiit":9, "jump rope":12.3, "row":7, "stairs":8.8, "lifting":6, "badminton":5.5, "basketball":6.5 };
+
+    const parseFood = (text)=>{
+      const t = (text||"").toLowerCase();
+      const key = Object.keys(FOOD_KCAL).sort((a,b)=>b.length-a.length).find(w=>t.includes(w));
+      let base = key? FOOD_KCAL[key]: 0;
+      const qty = t.match(/(\d+(?:\.\d+)?)\s*(x|pcs|pieces|piece|eggs|egg|cups|cup|slices|slice)?/);
+      const gram = t.match(/(\d+(?:\.\d+)?)\s*g/);
+      let kcal = base;
+      if (gram && key && PER100[key]) {
+        const g = parseFloat(gram[1]); kcal = (PER100[key]*g)/100;
+      } else if (qty && key) {
+        const q = parseFloat(qty[1]); if(!isNaN(q) && q>0) kcal = base*q;
+      }
+      return Math.round(kcal||0);
+    };
+
+    const parseWorkout = (text, kg)=>{
+      const t = (text||"").toLowerCase();
+      const key = Object.keys(EX_MET).sort((a,b)=>b.length-a.length).find(w=>t.includes(w));
+      const met = key? EX_MET[key]: 5;
+      const m = t.match(/(\d+(?:\.\d+)?)\s*(min|mins|minutes|m)/);
+      const h = t.match(/(\d+(?:\.\d+)?)\s*(hr|hrs|hour|hours|h)/);
+      let minutes = 30;
+      if (m) minutes = parseFloat(m[1]); else if (h) minutes = parseFloat(h[1])*60;
+      return Math.round(((met*3.5*kg)/200)*minutes);
+    };
+
+    const stepsToKcal = (steps, kg)=>{
+      const minutes = (steps||0)/100; // ~100 steps/min
+      return Math.round(((3.3*3.5*kg)/200)*minutes);
+    };
+
+    // ---------- DOM refs ----------
+    const $ = sel => document.querySelector(sel);
+
+    // Tabs
+    document.querySelectorAll(".tabs button").forEach(btn=>{
+      btn.onclick = ()=>{
+        document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected","false"));
+        btn.setAttribute("aria-selected","true");
+        const v = btn.dataset.tab;
+        ["dash","log","profile","calendar"].forEach(id=>{ const el=$("#"+id); if(el) el.hidden = (id!==v); });
+        if (v==="calendar") renderDayPane(todayKey);
+      };
+    });
+
+    // Profile inputs
+    $("#sex").value = profile.sex;
+    $("#age").value = profile.age;
+    $("#height").value = profile.heightCm;
+    $("#weight").value = profile.weightKg;
+    $("#activity").value = profile.activity;
+    $("#startW").value = goal.startWeightKg;
+    $("#targetW").value = goal.targetWeightKg;
+
+    // Date picker
+    $("#datePicker").value = todayKey;
+    $("#datePicker").addEventListener("change", (e)=>{
+      const v = e.target.value || todayKey;
+      selectedDate = new Date(v+"T00:00:00");
+      todayKey = fmt(selectedDate);
+      renderAll();
+      renderDayPane(todayKey);
+    });
+
+    // Food add/clear
+    $("#foodAdd").onclick = ()=>{
+      const txt = $("#foodInput").value;
+      const chunks = txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean);
+      const entries = chunks.map(c=>({ text:c, kcal:parseFood(c) }));
+      const day = logs[todayKey] || {foods:[],workouts:[],steps:0,burned:0};
+      day.foods.push(...entries);
+      logs[todayKey] = day; save(LS.logs, logs);
+      $("#foodInput").value = "";
+      renderAll();
+    };
+    $("#foodClear").onclick = ()=>{
+      const day = logs[todayKey] || {foods:[],workouts:[],steps:0,burned:0};
+      day.foods = []; logs[todayKey] = day; save(LS.logs, logs); renderAll();
+    };
+
+    // Workouts
+    $("#workAdd").onclick = ()=>{
+      const txt = $("#workInput").value;
+      const chunks = txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean);
+      const entries = chunks.map(c=>({ text:c, kcal:parseWorkout(c, profile.weightKg) }));
+      const day = logs[todayKey] || {foods:[],workouts:[],steps:0,burned:0};
+      day.workouts.push(...entries);
+      logs[todayKey] = day; save(LS.logs, logs);
+      $("#workInput").value = "";
+      renderAll();
+    };
+    $("#workClear").onclick = ()=>{
+      const day = logs[todayKey] || {foods:[],workouts:[],steps:0,burned:0};
+      day.workouts = []; logs[todayKey] = day; save(LS.logs, logs); renderAll();
+    };
+
+    $("#stepsInput").addEventListener("input", (e)=>{
+      const day = logs[todayKey] || {foods:[],workouts:[],steps:0,burned:0};
+      day.steps = Math.max(0, parseInt(e.target.value||"0"));
+      logs[todayKey] = day; save(LS.logs, logs); renderAll();
+    });
+
+    $("#extraInput").addEventListener("input", (e)=>{
+      const day = logs[todayKey] || {foods:[],workouts:[],steps:0,burned:0};
+      day.burned = Math.max(0, parseInt(e.target.value||"0"));
+      logs[todayKey] = day; save(LS.logs, logs); renderAll();
+    });
+
+    // Profile/goal change handlers (save + rerender)
+    ["sex","age","height","weight","activity"].forEach(id=>{
+      $("#"+id).addEventListener("change", ()=>{
+        profile = {
+          sex: $("#sex").value,
+          age: parseInt($("#age").value||"0"),
+          heightCm: parseInt($("#height").value||"0"),
+          weightKg: parseFloat($("#weight").value||"0"),
+          activity: $("#activity").value
+        };
+        save(LS.profile, profile); renderAll();
+      });
+    });
+    ["startW","targetW"].forEach(id=>{
+      $("#"+id).addEventListener("change", ()=>{
+        goal = { startWeightKg: parseFloat($("#startW").value||"0"), targetWeightKg: parseFloat($("#targetW").value||"0") };
+        save(LS.goal, goal); renderAll();
+      });
+    });
+
+    function dayObj(key){ return logs[key] || {foods:[],workouts:[],steps:0,burned:0}; }
+
+    function renderAll(){
+      const bmr = calcBMR(profile);
+      const tdee = Math.round(bmr * mult(profile.activity));
+      const d = dayObj(todayKey);
+      const foodKcal = d.foods.reduce((a,b)=>a+b.kcal,0);
+      const stepKcal = stepsToKcal(d.steps, profile.weightKg);
+      const workoutKcal = d.workouts.reduce((a,b)=>a+b.kcal,0);
+      const burnedTotal = stepKcal + workoutKcal + d.burned;
+      const net = foodKcal - burnedTotal;
+
+      $("#todayKey").textContent = todayKey;
+      $("#bmr").textContent = bmr; $("#tdee").textContent = tdee; $("#activityLabel").textContent = profile.activity;
+      $("#bmrMini").textContent = bmr; $("#tdeeMini").textContent = tdee;
+      $("#foodKcal").textContent = foodKcal;
+      $("#stepsVal").textContent = d.steps; $("#stepKcal").textContent = stepKcal;
+      $("#workoutKcal").textContent = workoutKcal; $("#burnedExtra").textContent = d.burned;
+      $("#burnedTotal").textContent = burnedTotal; $("#netVal").textContent = net;
+
+      // lists
+      $("#foodList").innerHTML = d.foods.map((f,i)=>`<div class="row muted"><span>${f.text}</span><span class="right tag">${f.kcal} kcal</span><button class="btn small" data-del-food="${i}">✕</button></div>`).join("");
+      $("#workList").innerHTML = d.workouts.map((w,i)=>`<div class="row muted"><span>${w.text}</span><span class="right tag">${w.kcal} kcal</span><button class="btn small" data-del-work="${i}">✕</button></div>`).join("");
+      $("#stepsTag").textContent = `≈ ${stepKcal} kcal`;
+      $("#stepsInput").value = d.steps; $("#extraInput").value = d.burned;
+
+      // deletions
+      document.querySelectorAll("[data-del-food]").forEach(el=>{
+        el.onclick = ()=>{
+          const idx = parseInt(el.getAttribute("data-del-food"));
+          const dd = dayObj(todayKey); dd.foods.splice(idx,1); logs[todayKey]=dd; save(LS.logs, logs); renderAll();
+        };
+      });
+      document.querySelectorAll("[data-del-work]").forEach(el=>{
+        el.onclick = ()=>{
+          const idx = parseInt(el.getAttribute("data-del-work"));
+          const dd = dayObj(todayKey); dd.workouts.splice(idx,1); logs[todayKey]=dd; save(LS.logs, logs); renderAll();
+        };
+      });
+
+      // goal progress
+      const moved = goal.startWeightKg - profile.weightKg;
+      const total = goal.startWeightKg - goal.targetWeightKg;
+      const pct = total===0?0:Math.max(0, Math.min(100, Math.round((moved/total)*100))));
+      $("#goalPct").textContent = pct + "%";
+      $("#kgToGo").textContent = Math.abs(profile.weightKg - goal.targetWeightKg).toFixed(1);
+      $("#goalBar").style.width = pct + "%";
+    }
+
+    function renderDayPane(key){
+      const d = dayObj(key);
+      $("#dayKey").textContent = key;
+      const stepKcal = stepsToKcal(d.steps, profile.weightKg);
+      const workoutKcal = d.workouts.reduce((a,b)=>a+b.kcal,0);
+      const foodKcal = d.foods.reduce((a,b)=>a+b.kcal,0);
+      $("#calFoodDay").textContent = foodKcal;
+      $("#calBurnDay").textContent = stepKcal + workoutKcal + d.burned;
+      $("#foodsDay").innerHTML = d.foods.map(f=>`<div>• ${f.text} — ${f.kcal} kcal</div>`).join("");
+      $("#worksDay").innerHTML = d.workouts.map(w=>`<div>• ${w.text} — ${w.kcal} kcal</div>`).join("");
+      $("#stepsDay").textContent = `${d.steps} → ${stepKcal} kcal`;
+    }
+
+    renderAll(); renderDayPane(todayKey);
+
+    // ---------- PWA install ----------
+    let deferredPrompt=null;
+    window.addEventListener("beforeinstallprompt", (e)=>{ e.preventDefault(); deferredPrompt=e; $("#installBtn").style.display="inline-block"; });
+    $("#installBtn").onclick = async ()=>{ if(!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; $("#installBtn").style.display="none"; };
+
+    // Register service worker
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", ()=> navigator.serviceWorker.register("sw.js"));
+    }
+  </script>
+</body>
+</html>
