@@ -16,6 +16,7 @@
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .muted{background:var(--muted);border-radius:12px;padding:8px 10px;font-size:14px}
   input,select,textarea,button{background:var(--muted);color:var(--text);border:1px solid #2b3048;border-radius:10px;padding:8px 10px;font-size:14px}
+  textarea{width:100%;min-height:72px;resize:vertical}
   button{cursor:pointer}
   .btn{background:#2f3656}
   .btn-primary{background:var(--accent);color:#0b1a13;border-color:#4ecf93}
@@ -58,7 +59,7 @@
     <button class="btn" data-tab="calendar" type="button">Calendar</button>
   </nav>
 
-  <!-- DASHBOARD -->
+  <!-- DASHBOARD (only these 3 cards) -->
   <section id="dash" class="grid grid-2">
     <div class="card">
       <h3>Metabolism</h3>
@@ -89,8 +90,25 @@
     </div>
   </section>
 
-  <!-- DAILY LOG -->
+  <!-- DAILY LOG (Day Details + Food + Workouts & Steps + Weight) -->
   <section id="log" hidden class="grid grid-2">
+    <div class="card" style="grid-column:1/-1">
+      <h3>Day Details (<span id="dayKey"></span>)</h3>
+      <div class="grid">
+        <div class="muted">Food: <b id="calFoodDay">0</b> kcal</div>
+        <div class="muted">Burned: <b id="calBurnDay">0</b> kcal</div>
+        <div class="muted">Net (food − burned): <b id="calNetDay">0</b> kcal</div>
+        <div>
+          <div class="small"><b>Foods</b></div>
+          <div id="foodsDay" class="list"></div>
+          <div class="small"><b>Workouts</b></div>
+          <div id="worksDay" class="list"></div>
+          <div class="small"><b>Steps</b></div>
+          <div id="stepsDay" class="small"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <h3>Food (NLP-ish)</h3>
       <textarea id="foodInput" placeholder="e.g., I ate 2 eggs and 300g chicken"></textarea>
@@ -119,9 +137,17 @@
       </div>
       <div class="list" id="workList"></div>
     </div>
+
+    <div class="card" style="grid-column:1/-1">
+      <h3>Today's Weight</h3>
+      <div class="row">
+        <input id="weightToday" type="number" min="20" step="0.1" style="width:140px" />
+        <span class="small">Changing this updates your Profile weight and recalculates BMR/TDEE.</span>
+      </div>
+    </div>
   </section>
 
-  <!-- PROFILE -->
+  <!-- PROFILE & GOAL -->
   <section id="profile" hidden class="grid grid-2">
     <div class="card">
       <h3>Profile</h3>
@@ -154,37 +180,21 @@
     </div>
   </section>
 
-  <!-- CALENDAR -->
-  <section id="calendar" hidden class="grid grid-2">
+  <!-- CALENDAR (calendar only) -->
+  <section id="calendar" hidden>
     <div class="card">
       <div class="cal">
         <div class="cal-head">
           <button class="btn" id="prevMon" type="button">◀</button>
           <h3 id="monLbl" style="margin:0"></h3>
           <button class="btn" id="nextMon" type="button">▶</button>
-          <span class="right small">Tap a day to view/edit</span>
+          <span class="right small">Tap a day to jump to Daily Log</span>
         </div>
-        <div class="cal-grid" id="dowRow">
+        <div class="cal-grid">
           <div class="dow">Mon</div><div class="dow">Tue</div><div class="dow">Wed</div>
           <div class="dow">Thu</div><div class="dow">Fri</div><div class="dow">Sat</div><div class="dow">Sun</div>
         </div>
         <div class="cal-grid" id="calGrid"></div>
-      </div>
-    </div>
-    <div class="card">
-      <h3>Day Details (<span id="dayKey"></span>)</h3>
-      <div class="grid">
-        <div class="muted">Food: <b id="calFoodDay">0</b> kcal</div>
-        <div class="muted">Burned: <b id="calBurnDay">0</b> kcal</div>
-        <div class="muted">Net (food − burned): <b id="calNetDay">0</b> kcal</div>
-        <div>
-          <div class="small"><b>Foods</b></div>
-          <div id="foodsDay" class="list"></div>
-          <div class="small"><b>Workouts</b></div>
-          <div id="worksDay" class="list"></div>
-          <div class="small"><b>Steps</b></div>
-          <div id="stepsDay" class="small"></div>
-        </div>
       </div>
     </div>
   </section>
@@ -192,7 +202,7 @@
 
 <script>
   // ---------- Storage ----------
-  const LS = { profile:"caltrack_profile_v1", goal:"caltrack_goal_v1", logs:"caltrack_logs_v1" };
+  const LS = { profile:"caltrack_profile_v1", goal:"caltrack_goal_v1", logs:"caltrack_logs_v1", weights:"caltrack_weights_v1" };
   const load=(k,def)=>{ try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch{ return def } };
   const save=(k,v)=>localStorage.setItem(k, JSON.stringify(v));
 
@@ -200,6 +210,7 @@
   let profile = load(LS.profile,{sex:"male",age:20,heightCm:170,weightKg:70,activity:"moderate"});
   let goal    = load(LS.goal,{startWeightKg:70,targetWeightKg:50});
   let logs    = load(LS.logs,{});
+  let weights = load(LS.weights,{}); // {"YYYY-MM-DD": weightKg}
   const $ = s => document.querySelector(s);
 
   // ---------- Date helpers ----------
@@ -218,19 +229,21 @@
   const stepsToKcal=(steps,kg)=>Math.round(((3.3*3.5*kg)/200)*((steps||0)/100));
   const dayObj=k=>logs[k]||{foods:[],workouts:[],steps:0,burned:0};
 
-  // ---------- Tabs (fixed) ----------
-  document.querySelectorAll(".tabs button").forEach(btn=>{
-    btn.addEventListener("click",()=>{
-      document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected","false"));
-      btn.setAttribute("aria-selected","true");
-      const v = btn.dataset.tab;
-      ["dash","log","profile","calendar"].forEach(id=>{
-        const el = document.getElementById(id);
-        if(!el) return;
-        if(id===v){ el.removeAttribute("hidden"); } else { el.setAttribute("hidden",""); }
-      });
-      if(v==="calendar"){ renderCalendar(); renderDayPane(fmt(selectedDate)); }
+  // ---------- Tabs (strict show-one) ----------
+  function showTab(name){
+    ["dash","log","profile","calendar"].forEach(id=>{
+      const el=document.getElementById(id);
+      if(!el) return;
+      if(id===name){ el.removeAttribute("hidden"); }
+      else { el.setAttribute("hidden",""); }
     });
+    document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected","false"));
+    document.querySelector(`.tabs button[data-tab="${name}"]`)?.setAttribute("aria-selected","true");
+    if(name==="calendar"){ renderCalendar(); }
+    if(name==="log"){ renderDayPane(todayKey); }
+  }
+  document.querySelectorAll(".tabs button").forEach(btn=>{
+    btn.addEventListener("click",()=>showTab(btn.dataset.tab));
   });
 
   // ---------- Profile + Goal bindings ----------
@@ -240,7 +253,10 @@
   ["sex","age","height","weight","activity"].forEach(id=>{
     $("#"+id).addEventListener("change",()=>{
       profile={ sex:$("#sex").value, age:parseInt($("#age").value||"0"), heightCm:parseInt($("#height").value||"0"), weightKg:parseFloat($("#weight").value||"0"), activity:$("#activity").value };
-      save(LS.profile,profile); renderAll(); renderCalendar();
+      // Sync profile weight into today's weight record
+      weights[todayKey]=profile.weightKg; save(LS.weights,weights);
+      const d=dayObj(todayKey); d.weight=profile.weightKg; logs[todayKey]=d; save(LS.logs,logs);
+      save(LS.profile,profile); renderAll(); renderCalendar(); if(!document.getElementById("log").hasAttribute("hidden")) renderDayPane(todayKey);
     });
   });
   ["startW","targetW"].forEach(id=>{
@@ -255,20 +271,39 @@
     const txt=$("#foodInput").value;
     const items=txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean).map(c=>({text:c,kcal:parseFood(c)}));
     const d=dayObj(todayKey); d.foods.push(...items); logs[todayKey]=d; save(LS.logs,logs);
-    $("#foodInput").value=""; renderAll(); renderCalendar();
+    $("#foodInput").value=""; renderAll(); renderCalendar(); renderDayPane(todayKey);
   });
-  $("#foodClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.foods=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); });
+  $("#foodClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.foods=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); });
 
   $("#workAdd").addEventListener("click",()=>{
     const txt=$("#workInput").value;
     const items=txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean).map(c=>({text:c,kcal:parseWorkout(c,profile.weightKg)}));
     const d=dayObj(todayKey); d.workouts.push(...items); logs[todayKey]=d; save(LS.logs,logs);
-    $("#workInput").value=""; renderAll(); renderCalendar();
+    $("#workInput").value=""; renderAll(); renderCalendar(); renderDayPane(todayKey);
   });
-  $("#workClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.workouts=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); });
+  $("#workClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.workouts=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); });
 
-  $("#stepsInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.steps=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); });
-  $("#extraInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.burned=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); });
+  $("#stepsInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.steps=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); });
+  $("#extraInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.burned=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); });
+
+  // Today's weight input (updates profile & history)
+  const weightToday = $("#weightToday");
+  function syncWeightInput(){
+    const d = dayObj(todayKey);
+    const w = (d.weight!=null) ? d.weight : (weights[todayKey]!=null ? weights[todayKey] : profile.weightKg);
+    weightToday.value = (w||0).toString();
+  }
+  weightToday.addEventListener("input", e=>{
+    const val = Math.max(0, parseFloat(e.target.value||"0"));
+    if(!isNaN(val) && val>0){
+      // save to day, weights history, and profile
+      const d=dayObj(todayKey); d.weight=val; logs[todayKey]=d; save(LS.logs,logs);
+      weights[todayKey]=val; save(LS.weights,weights);
+      profile.weightKg = val; save(LS.profile,profile);
+      $("#weight").value = val; // reflect in Profile tab
+      renderAll(); renderCalendar(); renderDayPane(todayKey);
+    }
+  });
 
   // ---------- Render helpers ----------
   function statsFor(key){
@@ -283,6 +318,8 @@
   }
 
   function renderAll(){
+    // ensure profile weight reflects today’s weight if present
+    if (weights[todayKey]!=null) { profile.weightKg = weights[todayKey]; $("#weight").value = profile.weightKg; save(LS.profile,profile); }
     const bmr=calcBMR(profile), tdee=Math.round(bmr*mult(profile.activity));
     const s = statsFor(todayKey);
     $("#todayKey").textContent=todayKey;
@@ -293,6 +330,11 @@
     $("#burnedTotal").textContent=s.burned; $("#netVal").textContent=s.net;
     $("#stepsTag").textContent=`≈ ${s.step} kcal`;
     $("#stepsInput").value=s.d.steps; $("#extraInput").value=s.d.burned;
+    $("#kgToGo").textContent=Math.abs(profile.weightKg - goal.targetWeightKg).toFixed(1);
+
+    const moved=goal.startWeightKg - profile.weightKg, total=goal.startWeightKg - goal.targetWeightKg;
+    const pct = total===0?0:Math.max(0,Math.min(100,Math.round((moved/total)*100)));
+    $("#goalPct").textContent=pct+"%"; $("#goalBar").style.width=pct+"%";
 
     // lists with edit/delete
     $("#foodList").innerHTML=s.d.foods.map((f,i)=>`
@@ -308,44 +350,40 @@
         <button class="btn small" data-del-work="${i}" type="button">✕</button>
       </div>`).join("");
 
-    // delete handlers
+    // delete/edit handlers
     document.querySelectorAll("[data-del-food]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-del-food")); const dd=dayObj(todayKey); dd.foods.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar();
+      const i=parseInt(el.getAttribute("data-del-food")); const dd=dayObj(todayKey); dd.foods.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
     });
     document.querySelectorAll("[data-del-work]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-del-work")); const dd=dayObj(todayKey); dd.workouts.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar();
+      const i=parseInt(el.getAttribute("data-del-work")); const dd=dayObj(todayKey); dd.workouts.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
     });
-
-    // edit handlers (text and kcal)
     document.querySelectorAll("[data-edit-food]").forEach(el=>el.onclick=()=>{
       const i=parseInt(el.getAttribute("data-edit-food")); const dd=dayObj(todayKey);
       const nv=prompt("Edit food text:", dd.foods[i].text); if(nv==null) return;
-      dd.foods[i].text=nv; dd.foods[i].kcal=parseFood(nv); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar();
+      dd.foods[i].text=nv; dd.foods[i].kcal=parseFood(nv); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
     });
     document.querySelectorAll("[data-edit-work]").forEach(el=>el.onclick=()=>{
       const i=parseInt(el.getAttribute("data-edit-work")); const dd=dayObj(todayKey);
       const nv=prompt("Edit workout text:", dd.workouts[i].text); if(nv==null) return;
-      dd.workouts[i].text=nv; dd.workouts[i].kcal=parseWorkout(nv, profile.weightKg); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar();
+      dd.workouts[i].text=nv; dd.workouts[i].kcal=parseWorkout(nv, profile.weightKg); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
     });
     document.querySelectorAll("[data-edit-food-k]").forEach(el=>el.onclick=()=>{
       const i=parseInt(el.getAttribute("data-edit-food-k")); const dd=dayObj(todayKey);
       const nv=prompt("Set calories for this food:", dd.foods[i].kcal); if(nv==null) return;
-      dd.foods[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar();
+      dd.foods[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
     });
     document.querySelectorAll("[data-edit-work-k]").forEach(el=>el.onclick=()=>{
       const i=parseInt(el.getAttribute("data-edit-work-k")); const dd=dayObj(todayKey);
       const nv=prompt("Set calories burned for this workout:", dd.workouts[i].kcal); if(nv==null) return;
-      dd.workouts[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar();
+      dd.workouts[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
     });
 
-    $("#kgToGo").textContent=Math.abs(profile.weightKg - goal.targetWeightKg).toFixed(1);
-    const moved=goal.startWeightKg - profile.weightKg, total=goal.startWeightKg - goal.targetWeightKg;
-    const pct = total===0?0:Math.max(0,Math.min(100,Math.round((moved/total)*100)));
-    $("#goalPct").textContent=pct+"%"; $("#goalBar").style.width=pct+"%";
+    // set today's weight input
+    syncWeightInput();
   }
 
   // ---------- Calendar ----------
-  let calMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1); // first of month
+  let calMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
   $("#prevMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()-1, 1); renderCalendar(); };
   $("#nextMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()+1, 1); renderCalendar(); };
 
@@ -353,13 +391,10 @@
     const y=calMonth.getFullYear(), m=calMonth.getMonth();
     $("#monLbl").textContent = calMonth.toLocaleString(undefined,{month:"long", year:"numeric"});
     const grid=$("#calGrid"); grid.innerHTML="";
-    // start on Monday
     const firstDay = new Date(y,m,1);
     let startIdx = (firstDay.getDay()+6)%7; // Monday=0 ... Sunday=6
     const daysInMonth = new Date(y, m+1, 0).getDate();
-    // pad blanks
-    for(let i=0;i<startIdx;i++){ const pad=document.createElement("div"); grid.appendChild(pad); }
-    // days
+    for(let i=0;i<startIdx;i++){ grid.appendChild(document.createElement("div")); }
     for(let d=1; d<=daysInMonth; d++){
       const key = fmt(new Date(y,m,d));
       const s = statsFor(key);
@@ -368,18 +403,12 @@
       if (key===fmt(selectedDate)) el.classList.add("sel");
       el.innerHTML = `<div class="dnum">${d}</div>${(s.food||s.burned)?'<span class="dot"></span>':''}`;
       const dot = el.querySelector(".dot");
-      if(dot){
-        if (s.balance>0) dot.classList.add("green");
-        else if (s.balance<0) dot.classList.add("red");
-        else dot.style.background = "var(--gray)";
-      }
+      if(dot){ if (s.balance>0) dot.classList.add("green"); else if (s.balance<0) dot.classList.add("red"); else dot.style.background="var(--gray)"; }
       el.onclick=()=>{
         selectedDate = new Date(y,m,d);
         todayKey = key;
-        document.querySelectorAll(".day.sel").forEach(x=>x.classList.remove("sel"));
-        el.classList.add("sel");
-        renderAll();
-        renderDayPane(key);
+        showTab("log"); // jump to Daily Log to edit/view
+        renderAll(); renderDayPane(key);
       };
       grid.appendChild(el);
     }
@@ -403,7 +432,7 @@
     </div>`).join("");
     $("#stepsDay").textContent = `${s.d.steps} → ${s.step} kcal`;
 
-    // delete/edit handlers for the selected day
+    // delete/edit handlers for that day
     document.querySelectorAll("[data-del-food-day]").forEach(el=>el.onclick=()=>{
       const i=parseInt(el.getAttribute("data-del-food-day")); const dd=dayObj(key); dd.foods.splice(i,1); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar();
     });
@@ -430,9 +459,13 @@
       const nv=prompt("Set calories burned:", dd.workouts[i].kcal); if(nv==null) return;
       dd.workouts[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar();
     });
+
+    // sync weight input for the selected (todayKey) day
+    syncWeightInput();
   }
 
   // ---------- First paint ----------
+  showTab("dash");
   renderAll();
   renderCalendar();
   renderDayPane(todayKey);
