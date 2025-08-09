@@ -10,9 +10,9 @@ const ASSETS = [
 // === Firebase init ===
 // 1) replace with your config from Firebase console
 const firebaseConfig = {
-  apiKey: "YOUR_KEY",
-  authDomain: "YOUR_DOMAIN.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
+  apiKey: "AIzaSyBB755rLbns2NNSOTVn3K9oj6ODryTxP6E",
+  authDomain: "calorietracker-4adcd.firebaseapp.com",
+  projectId: "calorietracker-4adcd",
 };
 firebase.initializeApp(firebaseConfig);
 
@@ -128,4 +128,5 @@ self.addEventListener("fetch", (e) => {
     );
   }
 });
+
 
