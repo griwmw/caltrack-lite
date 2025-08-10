@@ -15,7 +15,7 @@
   :root { --bg:#0f1115; --card:#171923; --muted:#212433; --text:#e6e6e6; --accent:#5ee0a1; --red:#ff6b6b; --green:#5ee0a1; --gray:#8b8fa3; }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:980px;margin:0 auto;padding:16px}
+  .wrap{max-width:980px;margin:0 auto;padding:16px; padding-bottom: 48px;}
   .grid{display:grid;gap:12px}
   @media (min-width:860px){ .grid-2{grid-template-columns:1fr 1fr} }
   .card{background:var(--card);border:1px solid #22263a;border-radius:14px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
@@ -583,3 +583,4 @@ auth.onAuthStateChanged(async (user) => {
 </script>
 </body>
 </html>
+
