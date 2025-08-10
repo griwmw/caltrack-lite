@@ -476,14 +476,15 @@ renderCalendar();
 renderDayPane(todayKey);
 
 /* ========================= Firebase Auth + Firestore ========================= */
-/* Replace messagingSenderId + appId with your real values from Firebase console */
+/* Your provided config */
 const firebaseConfig = {
   apiKey: "AIzaSyBB755rLbns2NNSOTVn3K9oj6ODryTxP6E",
   authDomain: "calorietracker-4adcd.firebaseapp.com",
   projectId: "calorietracker-4adcd",
-  storageBucket: "calorietracker-4adcd.appspot.com",
-  messagingSenderId: "732794700310", /* <-- replace */
-  appId: "1:732794700310:web:898e2d7377f68b1ac92b37" /* <-- replace */
+  storageBucket: "calorietracker-4adcd.firebasestorage.app",
+  messagingSenderId: "732794700310",
+  appId: "1:732794700310:web:898e2d7377f68b1ac92b37",
+  measurementId: "G-L9VJKF8X2F"
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
@@ -499,66 +500,17 @@ const signInBtn = document.getElementById("signInBtn");
 const signOutBtn = document.getElementById("signOutBtn");
 const userEmailLbl = document.getElementById("userEmail");
 
-signInBtn.addEventListener("click", async () => {
-  try {
-    if (isIOS) {
-      sessionStorage.setItem("afterSignIn", "1");   // <-- add
-      await auth.signInWithRedirect(provider);
-    } else {
-      await auth.signInWithPopup(provider);
-    }
-  } catch (e) {
-    console.error("Sign-in failed:", e);
-    alert("Sign-in failed: " + (e.message || e));
+/* Status helper (visible on phone) */
+function showStatus(msg){
+  let el = document.getElementById("status");
+  if(!el){
+    el = document.createElement("div");
+    el.id = "status";
+    el.style.cssText = "position:fixed;left:12px;right:12px;bottom:12px;padding:8px 12px;border-radius:8px;background:#2a2f4a;color:#fff;font-size:12px;z-index:9999";
+    document.body.appendChild(el);
   }
-});
-
-signOutBtn.addEventListener("click", async () => {
-  try { await auth.signOut(); } catch (e) {
-    console.error("Sign-out failed:", e);
-    alert("Sign-out failed: " + (e.message || e));
-  }
-});
-
-/* Handle iOS redirect result (won't throw on success) */
-// Handle redirect (iOS) and force a one-time refresh so UI updates reliably
-auth.getRedirectResult()
-  .then(async (res) => {
-    // If Google returned a user, we can update immediately
-    if (res && res.user) {
-      // Clear OAuth query params from the URL (optional, keeps URL clean)
-      if (location.search || location.hash) {
-        history.replaceState(null, "", location.pathname);
-      }
-      // Load cloud data now (no need to wait for onAuthStateChanged)
-      const u = res.user;
-      currentUid = u.uid;
-      signInBtn.style.display = "none";
-      signOutBtn.style.display = "inline-block";
-      userEmailLbl.textContent = u.email || "";
-      await loadFromCloud(u.uid);
-
-      // If we just came from a redirect, do a one-time refresh to stabilize iOS state
-      if (sessionStorage.getItem("afterSignIn") === "1") {
-        sessionStorage.removeItem("afterSignIn");
-        // Use replace so we don't add an extra history entry
-        location.replace(location.pathname);
-      }
-    } else {
-      // No res.user (could be returning from redirect but already had a session)
-      if (sessionStorage.getItem("afterSignIn") === "1" && auth.currentUser) {
-        sessionStorage.removeItem("afterSignIn");
-        location.replace(location.pathname);
-      }
-    }
-  })
-  .catch((e) => {
-    console.error("Redirect result error:", e);
-    sessionStorage.removeItem("afterSignIn"); // don’t get stuck
-  });
-
-
-
+  el.textContent = msg;
+}
 
 /* Per-user doc helpers */
 const userDoc = (uid) => db.collection("users").doc(uid);
@@ -587,7 +539,7 @@ async function loadFromCloud(uid) {
 
       renderAll(); renderCalendar(); renderDayPane(todayKey);
     }
-  } catch (e) { console.error("loadFromCloud failed:", e); }
+  } catch (e) { showStatus("Cloud load failed: " + (e.message || e)); }
 }
 let saveTimer=null, currentUid=null;
 function saveToCloudDebounced(){
@@ -608,6 +560,48 @@ async function saveToCloudNow(){
 /* Persist across sessions */
 auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
 
+/* Handle redirect (iOS) and one-time refresh */
+auth.getRedirectResult()
+  .then(async (res) => {
+    if (res && res.user) {
+      currentUid = res.user.uid;
+      signInBtn.style.display = "none";
+      signOutBtn.style.display = "inline-block";
+      userEmailLbl.textContent = res.user.email || "";
+      await loadFromCloud(currentUid);
+      if (sessionStorage.getItem("afterSignIn") === "1") {
+        sessionStorage.removeItem("afterSignIn");
+        location.replace(location.pathname);
+      }
+    } else if (sessionStorage.getItem("afterSignIn") === "1" && auth.currentUser) {
+      sessionStorage.removeItem("afterSignIn");
+      location.replace(location.pathname);
+    }
+  })
+  .catch((e) => {
+    sessionStorage.removeItem("afterSignIn");
+    showStatus("Sign-in error: " + (e.code || e.message || e));
+  });
+
+/* Click handlers */
+signInBtn.addEventListener("click", async () => {
+  try {
+    if (isIOS) {
+      sessionStorage.setItem("afterSignIn", "1");
+      await auth.signInWithRedirect(provider);
+    } else {
+      await auth.signInWithPopup(provider);
+    }
+  } catch (e) {
+    showStatus("Sign-in failed: " + (e.code || e.message || e));
+  }
+});
+signOutBtn.addEventListener("click", async () => {
+  try { await auth.signOut(); } catch (e) {
+    showStatus("Sign-out failed: " + (e.code || e.message || e));
+  }
+});
+
 /* Auth state listener */
 auth.onAuthStateChanged(async (user) => {
   if (user) {
@@ -626,4 +620,3 @@ auth.onAuthStateChanged(async (user) => {
 </script>
 </body>
 </html>
-
