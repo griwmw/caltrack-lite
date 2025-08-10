@@ -6,7 +6,7 @@
 <title>CalTrack (Lite)</title>
 <meta name="theme-color" content="#0f1115" />
 
-<!-- Firebase CDN (safe in public repos) -->
+<!-- Firebase CDN -->
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
@@ -15,7 +15,7 @@
   :root { --bg:#0f1115; --card:#171923; --muted:#212433; --text:#e6e6e6; --accent:#5ee0a1; --red:#ff6b6b; --green:#5ee0a1; --gray:#8b8fa3; }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:980px;margin:0 auto;padding:16px;padding-bottom:56px;} /* extra bottom padding */
+  .wrap{max-width:980px;margin:0 auto;padding:16px;padding-bottom:56px;}
   .grid{display:grid;gap:12px}
   @media (min-width:860px){ .grid-2{grid-template-columns:1fr 1fr} }
   .card{background:var(--card);border:1px solid #22263a;border-radius:14px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
@@ -65,11 +65,9 @@
     <span class="small" id="userEmail" style="opacity:.8;margin-left:8px"></span>
   </div>
 
-  <!-- TABS -->
+  <!-- TABS (only Dashboard & Calendar) -->
   <nav class="tabs">
     <button class="btn" data-tab="dash" aria-selected="true" type="button">Dashboard</button>
-    <button class="btn" data-tab="log" type="button">Daily Log</button>
-    <button class="btn" data-tab="profile" type="button">Profile & Goal</button>
     <button class="btn" data-tab="calendar" type="button">Calendar</button>
   </nav>
 
@@ -84,11 +82,19 @@
       </div>
       <div class="small">Mifflin–St Jeor + activity multiplier</div>
     </div>
+
     <div class="card">
       <h3>Goal Progress</h3>
       <div class="progress"><i id="goalBar"></i></div>
-      <div class="row small"><span id="goalPct">0%</span><span class="right"><span id="kgToGo">0</span> kg to go</span></div>
+      <div class="row small">
+        <span id="goalPct">0%</span>
+        <span class="right"><span id="kgToGo">0</span> kg to go</span>
+      </div>
+      <div class="small" id="goalKcalKg">Δ today: 0 kcal (0.00 kg)</div>
+      <div class="small" id="avgKcalKg">Avg/day: 0 kcal (0.00 kg)</div>
+      <div class="small" id="etaText">ETA: —</div>
     </div>
+
     <div class="card" style="grid-column:1/-1">
       <h3>Today Summary (<span id="todayKey"></span>)</h3>
       <div class="kpi">
@@ -98,20 +104,18 @@
       </div>
       <div class="kpi" style="margin-top:8px">
         <div class="muted">Extra Burn: <b id="burnedExtra">0</b> kcal</div>
-        <div class="muted">Burned Total: <b id="burnedTotal">0</b> kcal</div>
-        <div class="muted">Net (food − burned): <b id="netVal">0</b> kcal</div>
+        <div class="muted">TDEE (maintenance): <b id="tdeeInline">0</b> kcal</div>
+        <div class="muted">Net vs TDEE: <b id="netInclTdee">0</b> kcal</div>
       </div>
     </div>
-  </section>
 
-  <!-- DAILY LOG -->
-  <section id="log" hidden class="grid grid-2">
+    <!-- DAILY LOG (lives on Dashboard now) -->
     <div class="card" style="grid-column:1/-1">
       <h3>Day Details (<span id="dayKey"></span>)</h3>
       <div class="grid">
         <div class="muted">Food: <b id="calFoodDay">0</b> kcal</div>
-        <div class="muted">Burned: <b id="calBurnDay">0</b> kcal</div>
-        <div class="muted">Net (food − burned): <b id="calNetDay">0</b> kcal</div>
+        <div class="muted">Burned (steps+workouts+extra): <b id="calBurnDay">0</b> kcal</div>
+        <div class="muted">Net vs TDEE: <b id="calNetDay">0</b> kcal</div>
         <div>
           <div class="small"><b>Foods</b></div>
           <div id="foodsDay" class="list"></div>
@@ -130,6 +134,12 @@
         <button class="btn-primary" id="foodAdd" type="button">Add</button>
         <button class="btn" id="foodClear" type="button">Clear</button>
       </div>
+      <hr style="opacity:.2;border:none;border-top:1px solid #2b3048;margin:10px 0">
+      <div class="row">
+        <input id="foodName" placeholder="Custom food name" style="flex:1">
+        <input id="foodKcalInput" type="number" min="0" placeholder="kcal" style="width:120px">
+        <button class="btn" id="foodManualAdd" type="button">Add manual</button>
+      </div>
       <div class="list" id="foodList"></div>
     </div>
 
@@ -140,14 +150,20 @@
         <button class="btn-primary" id="workAdd" type="button">Add</button>
         <button class="btn" id="workClear" type="button">Clear</button>
       </div>
-      <div class="row">
+      <div class="row" style="margin-top:6px">
         <label>Steps</label>
         <input id="stepsInput" type="number" min="0" value="0" style="width:120px" />
         <span class="tag" id="stepsTag">≈ 0 kcal</span>
       </div>
-      <div class="row">
+      <div class="row" style="margin-top:6px">
         <label>Extra burned kcal</label>
         <input id="extraInput" type="number" min="0" value="0" style="width:120px" />
+      </div>
+      <hr style="opacity:.2;border:none;border-top:1px solid #2b3048;margin:10px 0">
+      <div class="row">
+        <input id="workName" placeholder="Custom workout name" style="flex:1">
+        <input id="workKcalInput" type="number" min="0" placeholder="kcal burned" style="width:140px">
+        <button class="btn" id="workManualAdd" type="button">Add manual</button>
       </div>
       <div class="list" id="workList"></div>
     </div>
@@ -159,10 +175,7 @@
         <span class="small">Changing this updates your Profile weight and recalculates BMR/TDEE.</span>
       </div>
     </div>
-  </section>
 
-  <!-- PROFILE & GOAL -->
-  <section id="profile" hidden class="grid grid-2">
     <div class="card">
       <h3>Profile</h3>
       <div class="grid">
@@ -194,7 +207,7 @@
     </div>
   </section>
 
-  <!-- CALENDAR -->
+  <!-- CALENDAR (calendar + goal) -->
   <section id="calendar" hidden>
     <div class="card">
       <div class="cal">
@@ -202,7 +215,7 @@
           <button class="btn" id="prevMon" type="button">◀</button>
           <h3 id="monLbl" style="margin:0"></h3>
           <button class="btn" id="nextMon" type="button">▶</button>
-          <span class="right small">Tap a day to jump to Daily Log</span>
+          <span class="right small">Tap a day to jump back to Dashboard</span>
         </div>
         <div class="cal-grid">
           <div class="dow">Mon</div><div class="dow">Tue</div><div class="dow">Wed</div>
@@ -210,6 +223,17 @@
         </div>
         <div class="cal-grid" id="calGrid"></div>
       </div>
+    </div>
+
+    <div class="card">
+      <h3>Goal Progress</h3>
+      <div class="progress"><i id="goalBarCal"></i></div>
+      <div class="row small">
+        <span id="goalPctCal">0%</span>
+        <span class="right"><span id="kgToGoCal">0</span> kg to go</span>
+      </div>
+      <div class="small" id="avgKcalKgCal">Avg/day: 0 kcal (0.00 kg)</div>
+      <div class="small" id="etaTextCal">ETA: —</div>
     </div>
   </section>
 </div>
@@ -246,7 +270,7 @@ const dayObj=k=>logs[k]||{foods:[],workouts:[],steps:0,burned:0};
 
 /* ---------- Tabs ---------- */
 function showTab(name){
-  ["dash","log","profile","calendar"].forEach(id=>{
+  ["dash","calendar"].forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
     if(id===name){ el.removeAttribute("hidden"); }
@@ -254,24 +278,23 @@ function showTab(name){
   });
   document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected","false"));
   document.querySelector(`.tabs button[data-tab="${name}"]`)?.setAttribute("aria-selected","true");
-  if(name==="calendar"){ renderCalendar(); }
-  if(name==="log"){ renderDayPane(todayKey); }
+  if(name==="calendar"){ renderCalendar(); syncGoalCardCal(); }
 }
 document.querySelectorAll(".tabs button").forEach(btn=>{
   btn.addEventListener("click",()=>showTab(btn.dataset.tab));
 });
 
-/* ---------- Profile & Goal ---------- */
+/* ---------- Profile & Goal prefill ---------- */
 $("#sex").value=profile.sex; $("#age").value=profile.age; $("#height").value=profile.heightCm; $("#weight").value=profile.weightKg; $("#activity").value=profile.activity;
 $("#startW").value=goal.startWeightKg; $("#targetW").value=goal.targetWeightKg;
 
+/* ---------- Bind profile and goal changes ---------- */
 ["sex","age","height","weight","activity"].forEach(id=>{
   $("#"+id).addEventListener("change",()=>{
     profile={ sex:$("#sex").value, age:parseInt($("#age").value||"0"), heightCm:parseInt($("#height").value||"0"), weightKg:parseFloat($("#weight").value||"0"), activity:$("#activity").value };
     weights[todayKey]=profile.weightKg; save(LS.weights,weights);
     const d=dayObj(todayKey); d.weight=profile.weightKg; logs[todayKey]=d; save(LS.logs,logs);
-    save(LS.profile,profile); renderAll(); renderCalendar(); if(!document.getElementById("log").hasAttribute("hidden")) renderDayPane(todayKey);
-    saveToCloudDebounced();
+    save(LS.profile,profile); renderAll(); renderCalendar(); saveToCloudDebounced();
   });
 });
 ["startW","targetW"].forEach(id=>{
@@ -286,20 +309,34 @@ $("#foodAdd").addEventListener("click",()=>{
   const txt=$("#foodInput").value;
   const items=txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean).map(c=>({text:c,kcal:parseFood(c)}));
   const d=dayObj(todayKey); d.foods.push(...items); logs[todayKey]=d; save(LS.logs,logs);
-  $("#foodInput").value=""; renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+  $("#foodInput").value=""; renderAll(); renderCalendar(); saveToCloudDebounced();
 });
-$("#foodClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.foods=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced(); });
+$("#foodClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.foods=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); saveToCloudDebounced(); });
+$("#foodManualAdd").addEventListener("click",()=>{
+  const name = ($("#foodName").value||"").trim();
+  const kcal = Math.max(0, Math.round(parseFloat($("#foodKcalInput").value||"0")));
+  if(!name || !kcal) return alert("Enter a food name and kcal.");
+  const d=dayObj(todayKey); d.foods.push({text:name,kcal}); logs[todayKey]=d; save(LS.logs,logs);
+  $("#foodName").value=""; $("#foodKcalInput").value=""; renderAll(); renderCalendar(); saveToCloudDebounced();
+});
 
 $("#workAdd").addEventListener("click",()=>{
   const txt=$("#workInput").value;
   const items=txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean).map(c=>({text:c,kcal:parseWorkout(c,profile.weightKg)}));
   const d=dayObj(todayKey); d.workouts.push(...items); logs[todayKey]=d; save(LS.logs,logs);
-  $("#workInput").value=""; renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+  $("#workInput").value=""; renderAll(); renderCalendar(); saveToCloudDebounced();
 });
-$("#workClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.workouts=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced(); });
+$("#workClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.workouts=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); saveToCloudDebounced(); });
+$("#workManualAdd").addEventListener("click",()=>{
+  const name = ($("#workName").value||"").trim();
+  const kcal = Math.max(0, Math.round(parseFloat($("#workKcalInput").value||"0")));
+  if(!name || !kcal) return alert("Enter a workout name and kcal burned.");
+  const d=dayObj(todayKey); d.workouts.push({text:name,kcal}); logs[todayKey]=d; save(LS.logs,logs);
+  $("#workName").value=""; $("#workKcalInput").value=""; renderAll(); renderCalendar(); saveToCloudDebounced();
+});
 
-$("#stepsInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.steps=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced(); });
-$("#extraInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.burned=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced(); });
+$("#stepsInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.steps=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); saveToCloudDebounced(); });
+$("#extraInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.burned=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); saveToCloudDebounced(); });
 
 /* Today's weight */
 const weightToday = $("#weightToday");
@@ -315,38 +352,101 @@ weightToday.addEventListener("input", e=>{
     weights[todayKey]=val; save(LS.weights,weights);
     profile.weightKg = val; save(LS.profile,profile);
     $("#weight").value = val;
-    renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+    renderAll(); renderCalendar(); saveToCloudDebounced();
   }
 });
 
-/* ---------- Render ---------- */
+/* ---------- Stats helpers ---------- */
 function statsFor(key){
   const d = dayObj(key);
   const food = d.foods.reduce((a,b)=>a+b.kcal,0);
   const step = stepsToKcal(d.steps, profile.weightKg);
   const work = d.workouts.reduce((a,b)=>a+b.kcal,0);
-  const burned = step + work + d.burned;
-  const net = food - burned;
-  const balance = burned - food;
-  return { d, food, step, work, burned, net, balance };
-}
-function renderAll(){
-  if (weights[todayKey]!=null) { profile.weightKg = weights[todayKey]; $("#weight").value = profile.weightKg; save(LS.profile,profile); }
+  const burnedExtra = d.burned || 0;
+  const burnedActive = step + work + burnedExtra;
   const bmr=calcBMR(profile), tdee=Math.round(bmr*mult(profile.activity));
-  const s = statsFor(todayKey);
-  $("#todayKey").textContent=todayKey;
-  $("#bmr").textContent=bmr; $("#tdee").textContent=tdee; $("#activityLabel").textContent=profile.activity;
-  $("#bmrMini").textContent=bmr; $("#tdeeMini").textContent=tdee;
-  $("#foodKcal").textContent=s.food; $("#stepsVal").textContent=s.d.steps; $("#stepKcal").textContent=s.step;
-  $("#workoutKcal").textContent=s.work; $("#burnedExtra").textContent=s.d.burned;
-  $("#burnedTotal").textContent=s.burned; $("#netVal").textContent=s.net;
-  $("#stepsTag").textContent=`≈ ${s.step} kcal`;
-  $("#stepsInput").value=s.d.steps; $("#extraInput").value=s.d.burned;
-  $("#kgToGo").textContent=Math.abs(profile.weightKg - goal.targetWeightKg).toFixed(1);
+  // New NET: Food − TDEE − (steps+workouts+extra)
+  const netVsTDEE = food - tdee - burnedActive;   // + = surplus vs maintenance, − = deficit
+  return { d, food, step, work, burnedExtra, burnedActive, bmr, tdee, netVsTDEE };
+}
 
+/* kcal ↔ kg helpers */
+const KCAL_PER_KG = 7700;
+const kcalToKg = (kcal) => +(kcal / KCAL_PER_KG).toFixed(3);
+
+/* ---------- Render ---------- */
+function computeAverages(){
+  const keys = Object.keys(logs).sort();
+  if(keys.length===0) return { avgKcal:0, avgKg:0, days:0 };
+  let total=0, days=0;
+  keys.forEach(k=>{
+    const s = statsFor(k);
+    // even for past days use current profile's TDEE (simple MVP)
+    total += s.netVsTDEE;
+    days += 1;
+  });
+  const avg = total / days;
+  return { avgKcal: avg, avgKg: avg / KCAL_PER_KG, days };
+}
+function etaToGoal(avgKgPerDay){
+  const remaining = (goal.targetWeightKg - profile.weightKg); // negative means weight loss remaining
+  if (avgKgPerDay === 0) return "ETA: —";
+  // If target below current (lose): need negative avg to reach
+  if (remaining < 0 && avgKgPerDay >= 0) return "ETA: trend gaining; no ETA";
+  if (remaining > 0 && avgKgPerDay <= 0) return "ETA: trend losing; no ETA";
+  const daysNeeded = Math.ceil(Math.abs(remaining / avgKgPerDay));
+  const etaDate = new Date(); etaDate.setDate(etaDate.getDate()+daysNeeded);
+  return `ETA: ~${daysNeeded} day(s) (${etaDate.toLocaleDateString()})`;
+}
+
+function syncGoalCardCommon(prefix=""){
   const moved=goal.startWeightKg - profile.weightKg, total=goal.startWeightKg - goal.targetWeightKg;
   const pct = total===0?0:Math.max(0,Math.min(100,Math.round((moved/total)*100)));
-  $("#goalPct").textContent=pct+"%"; $("#goalBar").style.width=pct+"%";
+  const id = idPart => document.getElementById(prefix+idPart);
+  id("goalPct").textContent = pct + "%";
+  id("goalBar").style.width = pct + "%";
+  id("kgToGo").textContent = Math.abs(profile.weightKg - goal.targetWeightKg).toFixed(1);
+
+  const { avgKcal, avgKg } = computeAverages();
+  id("avgKcalKg").textContent = `Avg/day: ${Math.round(avgKcal)} kcal (${avgKg.toFixed(3)} kg)`;
+  id("etaText").textContent = etaToGoal(avgKg);
+}
+function syncGoalCardCal(){
+  const moved=goal.startWeightKg - profile.weightKg, total=goal.startWeightKg - goal.targetWeightKg;
+  const pct = total===0?0:Math.max(0,Math.min(100,Math.round((moved/total)*100)));
+  document.getElementById("goalPctCal").textContent = pct + "%";
+  document.getElementById("goalBarCal").style.width = pct + "%";
+  document.getElementById("kgToGoCal").textContent = Math.abs(profile.weightKg - goal.targetWeightKg).toFixed(1);
+  const { avgKcal, avgKg } = computeAverages();
+  document.getElementById("avgKcalKgCal").textContent = `Avg/day: ${Math.round(avgKcal)} kcal (${avgKg.toFixed(3)} kg)`;
+  document.getElementById("etaTextCal").textContent = etaToGoal(avgKg);
+}
+
+function renderAll(){
+  const s = statsFor(todayKey);
+
+  $("#todayKey").textContent=todayKey;
+  $("#bmr").textContent=s.bmr; $("#tdee").textContent=s.tdee; $("#tdeeInline").textContent=s.tdee; $("#activityLabel").textContent=profile.activity;
+  $("#bmrMini").textContent=s.bmr; $("#tdeeMini").textContent=s.tdee;
+  $("#foodKcal").textContent=s.food; $("#stepsVal").textContent=s.d.steps; $("#stepKcal").textContent=s.step;
+  $("#workoutKcal").textContent=s.work; $("#burnedExtra").textContent=s.burnedExtra;
+  $("#netInclTdee").textContent=s.netVsTDEE;
+
+  // Goal converters (today + averages)
+  const todayKg = kcalToKg(s.netVsTDEE);
+  $("#goalKcalKg").textContent = `Δ today: ${s.netVsTDEE} kcal (${todayKg.toFixed(2)} kg)`;
+  const { avgKcal, avgKg } = computeAverages();
+  $("#avgKcalKg").textContent = `Avg/day: ${Math.round(avgKcal)} kcal (${avgKg.toFixed(3)} kg)`;
+  $("#etaText").textContent = etaToGoal(avgKg);
+  syncGoalCardCommon("");
+
+  // Details and lists
+  const burnedTotal = s.burnedActive;
+  $("#calFoodDay").textContent = s.food;
+  $("#calBurnDay").textContent = burnedTotal;
+  $("#calNetDay").textContent = s.netVsTDEE;
+  $("#stepsTag").textContent=`≈ ${s.step} kcal`;
+  $("#stepsInput").value=s.d.steps; $("#extraInput").value=s.d.burned;
 
   $("#foodList").innerHTML=s.d.foods.map((f,i)=>`
     <div class="row muted">
@@ -361,33 +461,35 @@ function renderAll(){
       <button class="btn small" data-del-work="${i}" type="button">✕</button>
     </div>`).join("");
 
+  // delete/edit handlers
   document.querySelectorAll("[data-del-food]").forEach(el=>el.onclick=()=>{
-    const i=parseInt(el.getAttribute("data-del-food")); const dd=dayObj(todayKey); dd.foods.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+    const i=parseInt(el.getAttribute("data-del-food")); const dd=dayObj(todayKey); dd.foods.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); saveToCloudDebounced();
   });
   document.querySelectorAll("[data-del-work]").forEach(el=>el.onclick=()=>{
-    const i=parseInt(el.getAttribute("data-del-work")); const dd=dayObj(todayKey); dd.workouts.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+    const i=parseInt(el.getAttribute("data-del-work")); const dd=dayObj(todayKey); dd.workouts.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); saveToCloudDebounced();
   });
   document.querySelectorAll("[data-edit-food]").forEach(el=>el.onclick=()=>{
     const i=parseInt(el.getAttribute("data-edit-food")); const dd=dayObj(todayKey);
     const nv=prompt("Edit food text:", dd.foods[i].text); if(nv==null) return;
-    dd.foods[i].text=nv; dd.foods[i].kcal=parseFood(nv); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+    dd.foods[i].text=nv; dd.foods[i].kcal=parseFood(nv); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); saveToCloudDebounced();
   });
   document.querySelectorAll("[data-edit-work]").forEach(el=>el.onclick=()=>{
     const i=parseInt(el.getAttribute("data-edit-work")); const dd=dayObj(todayKey);
     const nv=prompt("Edit workout text:", dd.workouts[i].text); if(nv==null) return;
-    dd.workouts[i].text=nv; dd.workouts[i].kcal=parseWorkout(nv, profile.weightKg); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+    dd.workouts[i].text=nv; dd.workouts[i].kcal=parseWorkout(nv, profile.weightKg); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); saveToCloudDebounced();
   });
   document.querySelectorAll("[data-edit-food-k]").forEach(el=>el.onclick=()=>{
     const i=parseInt(el.getAttribute("data-edit-food-k")); const dd=dayObj(todayKey);
     const nv=prompt("Set calories for this food:", dd.foods[i].kcal); if(nv==null) return;
-    dd.foods[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+    dd.foods[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); saveToCloudDebounced();
   });
   document.querySelectorAll("[data-edit-work-k]").forEach(el=>el.onclick=()=>{
     const i=parseInt(el.getAttribute("data-edit-work-k")); const dd=dayObj(todayKey);
     const nv=prompt("Set calories burned for this workout:", dd.workouts[i].kcal); if(nv==null) return;
-    dd.workouts[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+    dd.workouts[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); saveToCloudDebounced();
   });
 
+  // keep weight input synced
   syncWeightInput();
 }
 
@@ -395,6 +497,7 @@ function renderAll(){
 let calMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
 document.getElementById("prevMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()-1, 1); renderCalendar(); };
 document.getElementById("nextMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()+1, 1); renderCalendar(); };
+
 function renderCalendar(){
   const y=calMonth.getFullYear(), m=calMonth.getMonth();
   document.getElementById("monLbl").textContent = calMonth.toLocaleString(undefined,{month:"long", year:"numeric"});
@@ -409,74 +512,26 @@ function renderCalendar(){
     const el = document.createElement("div");
     el.className = "day click";
     if (key===fmt(selectedDate)) el.classList.add("sel");
-    el.innerHTML = `<div class="dnum">${d}</div>${(s.food||s.burned)?'<span class="dot"></span>':''}`;
+    el.innerHTML = `<div class="dnum">${d}</div>${(s.food||s.burnedActive)?'<span class="dot"></span>':''}`;
     const dot = el.querySelector(".dot");
-    if(dot){ if (s.balance>0) dot.classList.add("green"); else if (s.balance<0) dot.classList.add("red"); else dot.style.background="var(--gray)"; }
+    if(dot){ if (s.netVsTDEE<0) dot.classList.add("green"); else if (s.netVsTDEE>0) dot.classList.add("red"); else dot.style.background="var(--gray)"; }
     el.onclick=()=>{
       selectedDate = new Date(y,m,d);
       todayKey = key;
-      showTab("log");
-      renderAll(); renderDayPane(key);
+      showTab("dash"); // jump to Dashboard to edit/view
+      renderAll();
     };
     grid.appendChild(el);
   }
 }
-function renderDayPane(key){
-  const s = statsFor(key);
-  document.getElementById("dayKey").textContent = key;
-  document.getElementById("calFoodDay").textContent = s.food;
-  document.getElementById("calBurnDay").textContent = s.burned;
-  document.getElementById("calNetDay").textContent = s.net;
-  document.getElementById("foodsDay").innerHTML = s.d.foods.map((f,i)=>`<div class="row muted">
-    <span class="click" data-edit-food-day="${i}">${f.text}</span>
-    <span class="right pill click" data-edit-foodk-day="${i}">${f.kcal} kcal</span>
-    <button class="btn small" data-del-food-day="${i}" type="button">✕</button>
-  </div>`).join("");
-  document.getElementById("worksDay").innerHTML = s.d.workouts.map((w,i)=>`<div class="row muted">
-    <span class="click" data-edit-work-day="${i}">${w.text}</span>
-    <span class="right pill click" data-edit-workk-day="${i}">${w.kcal} kcal</span>
-    <button class="btn small" data-del-work-day="${i}" type="button">✕</button>
-  </div>`).join("");
-  document.getElementById("stepsDay").textContent = `${s.d.steps} → ${s.step} kcal`;
-
-  document.querySelectorAll("[data-del-food-day]").forEach(el=>el.onclick=()=>{
-    const i=parseInt(el.getAttribute("data-del-food-day")); const dd=dayObj(key); dd.foods.splice(i,1); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
-  });
-  document.querySelectorAll("[data-del-work-day]").forEach(el=>el.onclick=()=>{
-    const i=parseInt(el.getAttribute("data-del-work-day")); const dd=dayObj(key); dd.workouts.splice(i,1); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
-  });
-  document.querySelectorAll("[data-edit-food-day]").forEach(el=>el.onclick=()=>{
-    const i=parseInt(el.getAttribute("data-edit-food-day")); const dd=dayObj(key);
-    const nv=prompt("Edit food text:", dd.foods[i].text); if(nv==null) return;
-    dd.foods[i].text=nv; dd.foods[i].kcal=parseFood(nv); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
-  });
-  document.querySelectorAll("[data-edit-work-day]").forEach(el=>el.onclick=()=>{
-    const i=parseInt(el.getAttribute("data-edit-work-day")); const dd=dayObj(key);
-    const nv=prompt("Edit workout text:", dd.workouts[i].text); if(nv==null) return;
-    dd.workouts[i].text=nv; dd.workouts[i].kcal=parseWorkout(nv, profile.weightKg); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
-  });
-  document.querySelectorAll("[data-edit-foodk-day]").forEach(el=>el.onclick=()=>{
-    const i=parseInt(el.getAttribute("data-edit-foodk-day")); const dd=dayObj(key);
-    const nv=prompt("Set calories:", dd.foods[i].kcal); if(nv==null) return;
-    dd.foods[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
-  });
-  document.querySelectorAll("[data-edit-workk-day]").forEach(el=>el.onclick=()=>{
-    const i=parseInt(el.getAttribute("data-edit-workk-day")); const dd=dayObj(key);
-    const nv=prompt("Set calories burned:", dd.workouts[i].kcal); if(nv==null) return;
-    dd.workouts[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
-  });
-
-  syncWeightInput();
-}
+function syncGoalCardCal(){ /* populated in renderAll via computeAverages */ }
 
 /* ---------- First paint ---------- */
 showTab("dash");
 renderAll();
 renderCalendar();
-renderDayPane(todayKey);
 
 /* ========================= Firebase Auth + Firestore ========================= */
-/* Your provided config */
 const firebaseConfig = {
   apiKey: "AIzaSyBB755rLbns2NNSOTVn3K9oj6ODryTxP6E",
   authDomain: "calorietracker-4adcd.firebaseapp.com",
@@ -495,7 +550,7 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const provider = new firebase.auth.GoogleAuthProvider();
 
-/* Elements exist now, safe to bind */
+/* Elements exist now */
 const signInBtn = document.getElementById("signInBtn");
 const signOutBtn = document.getElementById("signOutBtn");
 const userEmailLbl = document.getElementById("userEmail");
@@ -537,7 +592,7 @@ async function loadFromCloud(uid) {
       $("#activity").value = profile.activity;
       $("#startW").value = goal.startWeightKg; $("#targetW").value = goal.targetWeightKg;
 
-      renderAll(); renderCalendar(); renderDayPane(todayKey);
+      renderAll(); renderCalendar();
     }
   } catch (e) { showStatus("Cloud load failed: " + (e.message || e)); }
 }
@@ -545,7 +600,7 @@ let saveTimer=null, currentUid=null;
 function saveToCloudDebounced(){
   if (!currentUid) return;
   if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveToCloudNow, 1000);
+  saveTimer = setTimeout(saveToCloudNow, 800);
 }
 async function saveToCloudNow(){
   if (!currentUid) return;
@@ -557,8 +612,10 @@ async function saveToCloudNow(){
   } catch (e) { console.error("saveToCloud failed:", e); }
 }
 
-/* Persist across sessions */
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+/* Persistence: try LOCAL, fall back to SESSION (iOS privacy modes) */
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(async ()=>{
+  try { await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION); } catch (_) {}
+});
 
 /* Handle redirect (iOS) and one-time refresh */
 auth.getRedirectResult()
