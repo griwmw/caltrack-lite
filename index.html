@@ -5,9 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>CalTrack (Lite)</title>
 <meta name="theme-color" content="#0f1115" />
+
+<!-- Firebase CDN (safe to keep in <head>) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+
 <style>
   :root { --bg:#0f1115; --card:#171923; --muted:#212433; --text:#e6e6e6; --accent:#5ee0a1; --red:#ff6b6b; --green:#5ee0a1; --gray:#8b8fa3; }
   *{box-sizing:border-box}
@@ -48,141 +51,21 @@
   .click{cursor:pointer}
 </style>
 </head>
-<script>
-    // === Firebase init (use full config from Firebase console) ===
-  const firebaseConfig = {
-    apiKey: "AIzaSyBB755rLbns2NNSOTVn3K9oj6ODryTxP6E",
-    authDomain: "calorietracker-4adcd.firebaseapp.com",
-    projectId: "calorietracker-4adcd",
-    // optional but fine to include:
-    // storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    // messagingSenderId: "1234567890",
-  };
-  firebase.initializeApp(firebaseConfig);
-  
-  const auth = firebase.auth();
-  const db   = firebase.firestore();
-  
-  // UI refs
-  const signInBtn = document.getElementById("signInBtn");
-  const signOutBtn = document.getElementById("signOutBtn");
-  const userEmailLbl = document.getElementById("userEmail");
-  
-  // Heuristic: use redirect on iOS/Safari; popup elsewhere
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const provider = new firebase.auth.GoogleAuthProvider();
-  
-  signInBtn?.addEventListener("click", async () => {
-    try {
-      if (isIOS) {
-        await auth.signInWithRedirect(provider);
-      } else {
-        await auth.signInWithPopup(provider);
-      }
-    } catch (e) {
-      console.error("Sign-in failed:", e);
-      alert("Sign-in failed: " + (e.message || e));
-    }
-  });
-  
-  signOutBtn?.addEventListener("click", async () => {
-    try { await auth.signOut(); } catch (e) {
-      console.error("Sign-out failed:", e);
-      alert("Sign-out failed: " + (e.message || e));
-    }
-  });
-  
-  // After redirect back from Google (iOS), surface any error
-  auth.getRedirectResult().catch(e => {
-    console.error("Redirect result error:", e);
-    alert("Sign-in error: " + (e.message || e));
-  });
-  
-  // Auth state listener -- load or clear UI
-  let currentUid = null;
-  auth.onAuthStateChanged(async (user) => {
-    if (user) {
-      currentUid = user.uid;
-      signInBtn.style.display = "none";
-      signOutBtn.style.display = "inline-block";
-      userEmailLbl.textContent = user.email || "";
-  
-      // Load from Firestore (your existing function)
-      await loadFromCloud(currentUid);
-  
-      // Re-render after cloud load
-      renderAll(); renderCalendar(); renderDayPane(todayKey);
-    } else {
-      currentUid = null;
-      signInBtn.style.display = "inline-block";
-      signOutBtn.style.display = "none";
-      userEmailLbl.textContent = "";
-    }
-  });
-  
-  // Helpers for user doc (per-user namespace)
-  const userDoc = (uid) => db.collection("users").doc(uid);
-  const dataDoc = (uid) => userDoc(uid).collection("data").doc("current");
-  
-  // Example load/save (call saveToCloudDebounced() after your local saves)
-  async function loadFromCloud(uid) {
-    try {
-      const snap = await dataDoc(uid).get();
-      if (snap.exists) {
-        const data = snap.data() || {};
-        profile = data.profile || profile;
-        goal    = data.goal    || goal;
-        logs    = data.logs    || logs;
-        weights = data.weights || weights;
-        save(LS.profile, profile);
-        save(LS.goal, goal);
-        save(LS.logs, logs);
-        save(LS.weights, weights);
-        // reflect in inputs
-        $("#sex").value = profile.sex; $("#age").value = profile.age;
-        $("#height").value = profile.heightCm; $("#weight").value = profile.weightKg;
-        $("#activity").value = profile.activity;
-        $("#startW").value = goal.startWeightKg; $("#targetW").value = goal.targetWeightKg;
-      }
-    } catch (e) {
-      console.error("loadFromCloud failed:", e);
-      alert("Could not load cloud data: " + (e.message || e));
-    }
-  }
-  
-  let saveTimer=null;
-  function saveToCloudDebounced(){
-    if (!currentUid) return;
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveToCloudNow, 1000);
-  }
-  async function saveToCloudNow(){
-    if (!currentUid) return;
-    try {
-      await dataDoc(currentUid).set(
-        { profile, goal, logs, weights, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
-        { merge: true }
-      );
-    } catch (e) {
-      console.error("saveToCloud failed:", e);
-    }
-  }
-
-</script>
 <body>
 <div class="wrap">
   <header class="row">
     <h1 style="margin:0">CalTrack — Diet & Workout</h1>
-    <span class="tag">Saves to this device</span>
+    <span class="tag">Stores locally • Optional cloud backup</span>
   </header>
 
+  <!-- AUTH -->
   <div class="row" style="margin:8px 0;">
     <button class="btn" id="signInBtn" type="button">Sign in with Google</button>
     <button class="btn" id="signOutBtn" type="button" style="display:none">Sign out</button>
     <span class="small" id="userEmail" style="opacity:.8;margin-left:8px"></span>
   </div>
 
-
+  <!-- TABS -->
   <nav class="tabs">
     <button class="btn" data-tab="dash" aria-selected="true" type="button">Dashboard</button>
     <button class="btn" data-tab="log" type="button">Daily Log</button>
@@ -190,7 +73,7 @@
     <button class="btn" data-tab="calendar" type="button">Calendar</button>
   </nav>
 
-  <!-- DASHBOARD (only these 3 cards) -->
+  <!-- DASHBOARD -->
   <section id="dash" class="grid grid-2">
     <div class="card">
       <h3>Metabolism</h3>
@@ -221,7 +104,7 @@
     </div>
   </section>
 
-  <!-- DAILY LOG (Day Details + Food + Workouts & Steps + Weight) -->
+  <!-- DAILY LOG -->
   <section id="log" hidden class="grid grid-2">
     <div class="card" style="grid-column:1/-1">
       <h3>Day Details (<span id="dayKey"></span>)</h3>
@@ -311,7 +194,7 @@
     </div>
   </section>
 
-  <!-- CALENDAR (calendar only) -->
+  <!-- CALENDAR -->
   <section id="calendar" hidden>
     <div class="card">
       <div class="cal">
@@ -331,278 +214,372 @@
   </section>
 </div>
 
+<!-- ===== MAIN SCRIPT (after HTML so buttons exist) ===== -->
 <script>
-  // ---------- Storage ----------
-  const LS = { profile:"caltrack_profile_v1", goal:"caltrack_goal_v1", logs:"caltrack_logs_v1", weights:"caltrack_weights_v1" };
-  const load=(k,def)=>{ try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch{ return def } };
-  const save=(k,v)=>localStorage.setItem(k, JSON.stringify(v));
+/* ---------- Storage ---------- */
+const LS = { profile:"caltrack_profile_v1", goal:"caltrack_goal_v1", logs:"caltrack_logs_v1", weights:"caltrack_weights_v1" };
+const load=(k,def)=>{ try{const v=localStorage.getItem(k);return v?JSON.parse(v):def}catch{ return def } };
+const save=(k,v)=>localStorage.setItem(k, JSON.stringify(v));
 
-  // ---------- State ----------
-  let profile = load(LS.profile,{sex:"male",age:20,heightCm:170,weightKg:70,activity:"moderate"});
-  let goal    = load(LS.goal,{startWeightKg:70,targetWeightKg:50});
-  let logs    = load(LS.logs,{});
-  let weights = load(LS.weights,{}); // {"YYYY-MM-DD": weightKg}
-  const $ = s => document.querySelector(s);
+/* ---------- State ---------- */
+let profile = load(LS.profile,{sex:"male",age:20,heightCm:170,weightKg:70,activity:"moderate"});
+let goal    = load(LS.goal,{startWeightKg:70,targetWeightKg:50});
+let logs    = load(LS.logs,{});
+let weights = load(LS.weights,{}); // {"YYYY-MM-DD": weightKg}
+const $ = s => document.querySelector(s);
 
-  // ---------- Date helpers ----------
-  const fmt = d => new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
-  let selectedDate = new Date();
-  let todayKey = fmt(selectedDate);
+/* ---------- Date ---------- */
+const fmt = d => new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+let selectedDate = new Date();
+let todayKey = fmt(selectedDate);
 
-  // ---------- Calcs & NLP ----------
-  const calcBMR = p => Math.round(10*p.weightKg + 6.25*p.heightCm - 5*p.age + (p.sex==="male"?5:-161));
-  const mult = a => ({sedentary:1.2, light:1.375, moderate:1.55, very:1.725, athlete:1.9}[a]||1.55);
-  const FOOD_KCAL={steak:679,egg:78,banana:105,rice:206,chicken:335,salad:150,sandwich:300,apple:95,yogurt:150,noodles:400,sushi:250,pizza:285,cookie:160,milk:103,tea:0,coffee:2};
-  const PER100={chicken:165,steak:250,rice:130,noodles:138,yogurt:63,banana:89,apple:52,cookie:502};
-  const EX_MET={run:9.8,jogging:7,walk:3.3,cycling:8,swim:8,yoga:3,hiit:9,"jump rope":12.3,row:7,stairs:8.8,lifting:6,badminton:5.5,basketball:6.5};
-  const parseFood=t=>{t=(t||"").toLowerCase();const k=Object.keys(FOOD_KCAL).sort((a,b)=>b.length-a.length).find(w=>t.includes(w));let base=k?FOOD_KCAL[k]:0;const qty=t.match(/(\d+(?:\.\d+)?)\s*(x|pcs|pieces|piece|eggs|egg|cups|cup|slices|slice)?/);const g=t.match(/(\d+(?:\.\d+)?)\s*g/);let kcal=base;if(g&&k&&PER100[k]){kcal=(PER100[k]*parseFloat(g[1]))/100}else if(qty&&k){const q=parseFloat(qty[1]);if(!isNaN(q)&&q>0)kcal=base*q}return Math.round(kcal||0)}
-  const parseWorkout=(t,kg)=>{t=(t||"").toLowerCase();const k=Object.keys(EX_MET).sort((a,b)=>b.length-a.length).find(w=>t.includes(w));const met=k?EX_MET[k]:5;const m=t.match(/(\d+(?:\.\d+)?)\s*(min|mins|minutes|m)/);const h=t.match(/(\d+(?:\.\d+)?)\s*(hr|hrs|hour|hours|h)/);let minutes=30;if(m)minutes=parseFloat(m[1]);else if(h)minutes=parseFloat(h[1])*60;return Math.round(((met*3.5*kg)/200)*minutes)}
-  const stepsToKcal=(steps,kg)=>Math.round(((3.3*3.5*kg)/200)*((steps||0)/100));
-  const dayObj=k=>logs[k]||{foods:[],workouts:[],steps:0,burned:0};
+/* ---------- Calcs & NLP ---------- */
+const calcBMR = p => Math.round(10*p.weightKg + 6.25*p.heightCm - 5*p.age + (p.sex==="male"?5:-161));
+const mult = a => ({sedentary:1.2, light:1.375, moderate:1.55, very:1.725, athlete:1.9}[a]||1.55);
+const FOOD_KCAL={steak:679,egg:78,banana:105,rice:206,chicken:335,salad:150,sandwich:300,apple:95,yogurt:150,noodles:400,sushi:250,pizza:285,cookie:160,milk:103,tea:0,coffee:2};
+const PER100={chicken:165,steak:250,rice:130,noodles:138,yogurt:63,banana:89,apple:52,cookie:502};
+const EX_MET={run:9.8,jogging:7,walk:3.3,cycling:8,swim:8,yoga:3,hiit:9,"jump rope":12.3,row:7,stairs:8.8,lifting:6,badminton:5.5,basketball:6.5};
+const parseFood=t=>{t=(t||"").toLowerCase();const k=Object.keys(FOOD_KCAL).sort((a,b)=>b.length-a.length).find(w=>t.includes(w));let base=k?FOOD_KCAL[k]:0;const qty=t.match(/(\d+(?:\.\d+)?)\s*(x|pcs|pieces|piece|eggs|egg|cups|cup|slices|slice)?/);const g=t.match(/(\d+(?:\.\d+)?)\s*g/);let kcal=base;if(g&&k&&PER100[k]){kcal=(PER100[k]*parseFloat(g[1]))/100}else if(qty&&k){const q=parseFloat(qty[1]);if(!isNaN(q)&&q>0)kcal=base*q}return Math.round(kcal||0)}
+const parseWorkout=(t,kg)=>{t=(t||"").toLowerCase();const k=Object.keys(EX_MET).sort((a,b)=>b.length-a.length).find(w=>t.includes(w));const met=k?EX_MET[k]:5;const m=t.match(/(\d+(?:\.\d+)?)\s*(min|mins|minutes|m)/);const h=t.match(/(\d+(?:\.\d+)?)\s*(hr|hrs|hour|hours|h)/);let minutes=30;if(m)minutes=parseFloat(m[1]);else if(h)minutes=parseFloat(h[1])*60;return Math.round(((met*3.5*kg)/200)*minutes)}
+const stepsToKcal=(steps,kg)=>Math.round(((3.3*3.5*kg)/200)*((steps||0)/100));
+const dayObj=k=>logs[k]||{foods:[],workouts:[],steps:0,burned:0};
 
-  // ---------- Tabs (strict show-one) ----------
-  function showTab(name){
-    ["dash","log","profile","calendar"].forEach(id=>{
-      const el=document.getElementById(id);
-      if(!el) return;
-      if(id===name){ el.removeAttribute("hidden"); }
-      else { el.setAttribute("hidden",""); }
-    });
-    document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected","false"));
-    document.querySelector(`.tabs button[data-tab="${name}"]`)?.setAttribute("aria-selected","true");
-    if(name==="calendar"){ renderCalendar(); }
-    if(name==="log"){ renderDayPane(todayKey); }
+/* ---------- Tabs ---------- */
+function showTab(name){
+  ["dash","log","profile","calendar"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    if(id===name){ el.removeAttribute("hidden"); }
+    else { el.setAttribute("hidden",""); }
+  });
+  document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected","false"));
+  document.querySelector(`.tabs button[data-tab="${name}"]`)?.setAttribute("aria-selected","true");
+  if(name==="calendar"){ renderCalendar(); }
+  if(name==="log"){ renderDayPane(todayKey); }
+}
+document.querySelectorAll(".tabs button").forEach(btn=>{
+  btn.addEventListener("click",()=>showTab(btn.dataset.tab));
+});
+
+/* ---------- Profile & Goal bindings ---------- */
+$("#sex").value=profile.sex; $("#age").value=profile.age; $("#height").value=profile.heightCm; $("#weight").value=profile.weightKg; $("#activity").value=profile.activity;
+$("#startW").value=goal.startWeightKg; $("#targetW").value=goal.targetWeightKg;
+
+["sex","age","height","weight","activity"].forEach(id=>{
+  $("#"+id).addEventListener("change",()=>{
+    profile={ sex:$("#sex").value, age:parseInt($("#age").value||"0"), heightCm:parseInt($("#height").value||"0"), weightKg:parseFloat($("#weight").value||"0"), activity:$("#activity").value };
+    weights[todayKey]=profile.weightKg; save(LS.weights,weights);
+    const d=dayObj(todayKey); d.weight=profile.weightKg; logs[todayKey]=d; save(LS.logs,logs);
+    save(LS.profile,profile); renderAll(); renderCalendar(); if(!document.getElementById("log").hasAttribute("hidden")) renderDayPane(todayKey);
+    saveToCloudDebounced();
+  });
+});
+["startW","targetW"].forEach(id=>{
+  $("#"+id).addEventListener("change",()=>{
+    goal={ startWeightKg:parseFloat($("#startW").value||"0"), targetWeightKg:parseFloat($("#targetW").value||"0") };
+    save(LS.goal,goal); renderAll(); saveToCloudDebounced();
+  });
+});
+
+/* ---------- Daily Log events ---------- */
+$("#foodAdd").addEventListener("click",()=>{
+  const txt=$("#foodInput").value;
+  const items=txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean).map(c=>({text:c,kcal:parseFood(c)}));
+  const d=dayObj(todayKey); d.foods.push(...items); logs[todayKey]=d; save(LS.logs,logs);
+  $("#foodInput").value=""; renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+});
+$("#foodClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.foods=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced(); });
+
+$("#workAdd").addEventListener("click",()=>{
+  const txt=$("#workInput").value;
+  const items=txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean).map(c=>({text:c,kcal:parseWorkout(c,profile.weightKg)}));
+  const d=dayObj(todayKey); d.workouts.push(...items); logs[todayKey]=d; save(LS.logs,logs);
+  $("#workInput").value=""; renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+});
+$("#workClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.workouts=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced(); });
+
+$("#stepsInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.steps=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced(); });
+$("#extraInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.burned=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced(); });
+
+/* Today's weight input */
+const weightToday = $("#weightToday");
+function syncWeightInput(){
+  const d = dayObj(todayKey);
+  const w = (d.weight!=null) ? d.weight : (weights[todayKey]!=null ? weights[todayKey] : profile.weightKg);
+  weightToday.value = (w||0).toString();
+}
+weightToday.addEventListener("input", e=>{
+  const val = Math.max(0, parseFloat(e.target.value||"0"));
+  if(!isNaN(val) && val>0){
+    const d=dayObj(todayKey); d.weight=val; logs[todayKey]=d; save(LS.logs,logs);
+    weights[todayKey]=val; save(LS.weights,weights);
+    profile.weightKg = val; save(LS.profile,profile);
+    $("#weight").value = val;
+    renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
   }
-  document.querySelectorAll(".tabs button").forEach(btn=>{
-    btn.addEventListener("click",()=>showTab(btn.dataset.tab));
+});
+
+/* ---------- Renderers ---------- */
+function statsFor(key){
+  const d = dayObj(key);
+  const food = d.foods.reduce((a,b)=>a+b.kcal,0);
+  const step = stepsToKcal(d.steps, profile.weightKg);
+  const work = d.workouts.reduce((a,b)=>a+b.kcal,0);
+  const burned = step + work + d.burned;
+  const net = food - burned;    // >0 surplus; <0 deficit
+  const balance = burned - food;// >0 deficit; <0 surplus
+  return { d, food, step, work, burned, net, balance };
+}
+function renderAll(){
+  if (weights[todayKey]!=null) { profile.weightKg = weights[todayKey]; $("#weight").value = profile.weightKg; save(LS.profile,profile); }
+  const bmr=calcBMR(profile), tdee=Math.round(bmr*mult(profile.activity));
+  const s = statsFor(todayKey);
+  $("#todayKey").textContent=todayKey;
+  $("#bmr").textContent=bmr; $("#tdee").textContent=tdee; $("#activityLabel").textContent=profile.activity;
+  $("#bmrMini").textContent=bmr; $("#tdeeMini").textContent=tdee;
+  $("#foodKcal").textContent=s.food; $("#stepsVal").textContent=s.d.steps; $("#stepKcal").textContent=s.step;
+  $("#workoutKcal").textContent=s.work; $("#burnedExtra").textContent=s.d.burned;
+  $("#burnedTotal").textContent=s.burned; $("#netVal").textContent=s.net;
+  $("#stepsTag").textContent=`≈ ${s.step} kcal`;
+  $("#stepsInput").value=s.d.steps; $("#extraInput").value=s.d.burned;
+  $("#kgToGo").textContent=Math.abs(profile.weightKg - goal.targetWeightKg).toFixed(1);
+
+  const moved=goal.startWeightKg - profile.weightKg, total=goal.startWeightKg - goal.targetWeightKg;
+  const pct = total===0?0:Math.max(0,Math.min(100,Math.round((moved/total)*100)));
+  $("#goalPct").textContent=pct+"%"; $("#goalBar").style.width=pct+"%";
+
+  $("#foodList").innerHTML=s.d.foods.map((f,i)=>`
+    <div class="row muted">
+      <span class="click" data-edit-food="${i}">${f.text}</span>
+      <span class="right pill click" data-edit-food-k="${i}">${f.kcal} kcal</span>
+      <button class="btn small" data-del-food="${i}" type="button">✕</button>
+    </div>`).join("");
+  $("#workList").innerHTML=s.d.workouts.map((w,i)=>`
+    <div class="row muted">
+      <span class="click" data-edit-work="${i}">${w.text}</span>
+      <span class="right pill click" data-edit-work-k="${i}">${w.kcal} kcal</span>
+      <button class="btn small" data-del-work="${i}" type="button">✕</button>
+    </div>`).join("");
+
+  document.querySelectorAll("[data-del-food]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-del-food")); const dd=dayObj(todayKey); dd.foods.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+  });
+  document.querySelectorAll("[data-del-work]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-del-work")); const dd=dayObj(todayKey); dd.workouts.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+  });
+  document.querySelectorAll("[data-edit-food]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-edit-food")); const dd=dayObj(todayKey);
+    const nv=prompt("Edit food text:", dd.foods[i].text); if(nv==null) return;
+    dd.foods[i].text=nv; dd.foods[i].kcal=parseFood(nv); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+  });
+  document.querySelectorAll("[data-edit-work]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-edit-work")); const dd=dayObj(todayKey);
+    const nv=prompt("Edit workout text:", dd.workouts[i].text); if(nv==null) return;
+    dd.workouts[i].text=nv; dd.workouts[i].kcal=parseWorkout(nv, profile.weightKg); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+  });
+  document.querySelectorAll("[data-edit-food-k]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-edit-food-k")); const dd=dayObj(todayKey);
+    const nv=prompt("Set calories for this food:", dd.foods[i].kcal); if(nv==null) return;
+    dd.foods[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
+  });
+  document.querySelectorAll("[data-edit-work-k]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-edit-work-k")); const dd=dayObj(todayKey);
+    const nv=prompt("Set calories burned for this workout:", dd.workouts[i].kcal); if(nv==null) return;
+    dd.workouts[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced();
   });
 
-  // ---------- Profile + Goal bindings ----------
-  $("#sex").value=profile.sex; $("#age").value=profile.age; $("#height").value=profile.heightCm; $("#weight").value=profile.weightKg; $("#activity").value=profile.activity;
-  $("#startW").value=goal.startWeightKg; $("#targetW").value=goal.targetWeightKg;
+  syncWeightInput();
+}
 
-  ["sex","age","height","weight","activity"].forEach(id=>{
-    $("#"+id).addEventListener("change",()=>{
-      profile={ sex:$("#sex").value, age:parseInt($("#age").value||"0"), heightCm:parseInt($("#height").value||"0"), weightKg:parseFloat($("#weight").value||"0"), activity:$("#activity").value };
-      // Sync profile weight into today's weight record
-      weights[todayKey]=profile.weightKg; save(LS.weights,weights);
-      const d=dayObj(todayKey); d.weight=profile.weightKg; logs[todayKey]=d; save(LS.logs,logs);
-      save(LS.profile,profile); renderAll(); renderCalendar(); if(!document.getElementById("log").hasAttribute("hidden")) renderDayPane(todayKey);
-    });
-  });
-  ["startW","targetW"].forEach(id=>{
-    $("#"+id).addEventListener("change",()=>{
-      goal={ startWeightKg:parseFloat($("#startW").value||"0"), targetWeightKg:parseFloat($("#targetW").value||"0") };
-      save(LS.goal,goal); renderAll();
-    });
-  });
-
-  // ---------- Daily Log events ----------
-  $("#foodAdd").addEventListener("click",()=>{
-    const txt=$("#foodInput").value;
-    const items=txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean).map(c=>({text:c,kcal:parseFood(c)}));
-    const d=dayObj(todayKey); d.foods.push(...items); logs[todayKey]=d; save(LS.logs,logs);
-    $("#foodInput").value=""; renderAll(); renderCalendar(); renderDayPane(todayKey);
-  });
-  $("#foodClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.foods=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); });
-
-  $("#workAdd").addEventListener("click",()=>{
-    const txt=$("#workInput").value;
-    const items=txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean).map(c=>({text:c,kcal:parseWorkout(c,profile.weightKg)}));
-    const d=dayObj(todayKey); d.workouts.push(...items); logs[todayKey]=d; save(LS.logs,logs);
-    $("#workInput").value=""; renderAll(); renderCalendar(); renderDayPane(todayKey);
-  });
-  $("#workClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.workouts=[]; logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); });
-
-  $("#stepsInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.steps=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); });
-  $("#extraInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.burned=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); });
-
-  // Today's weight input (updates profile & history)
-  const weightToday = $("#weightToday");
-  function syncWeightInput(){
-    const d = dayObj(todayKey);
-    const w = (d.weight!=null) ? d.weight : (weights[todayKey]!=null ? weights[todayKey] : profile.weightKg);
-    weightToday.value = (w||0).toString();
+/* ---------- Calendar ---------- */
+let calMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+$("#prevMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()-1, 1); renderCalendar(); };
+$("#nextMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()+1, 1); renderCalendar(); };
+function renderCalendar(){
+  const y=calMonth.getFullYear(), m=calMonth.getMonth();
+  $("#monLbl").textContent = calMonth.toLocaleString(undefined,{month:"long", year:"numeric"});
+  const grid=$("#calGrid"); grid.innerHTML="";
+  const firstDay = new Date(y,m,1);
+  let startIdx = (firstDay.getDay()+6)%7; // Monday=0 ... Sunday=6
+  const daysInMonth = new Date(y, m+1, 0).getDate();
+  for(let i=0;i<startIdx;i++){ grid.appendChild(document.createElement("div")); }
+  for(let d=1; d<=daysInMonth; d++){
+    const key = fmt(new Date(y,m,d));
+    const s = statsFor(key);
+    const el = document.createElement("div");
+    el.className = "day click";
+    if (key===fmt(selectedDate)) el.classList.add("sel");
+    el.innerHTML = `<div class="dnum">${d}</div>${(s.food||s.burned)?'<span class="dot"></span>':''}`;
+    const dot = el.querySelector(".dot");
+    if(dot){ if (s.balance>0) dot.classList.add("green"); else if (s.balance<0) dot.classList.add("red"); else dot.style.background="var(--gray)"; }
+    el.onclick=()=>{
+      selectedDate = new Date(y,m,d);
+      todayKey = key;
+      showTab("log");
+      renderAll(); renderDayPane(key);
+    };
+    grid.appendChild(el);
   }
-  weightToday.addEventListener("input", e=>{
-    const val = Math.max(0, parseFloat(e.target.value||"0"));
-    if(!isNaN(val) && val>0){
-      // save to day, weights history, and profile
-      const d=dayObj(todayKey); d.weight=val; logs[todayKey]=d; save(LS.logs,logs);
-      weights[todayKey]=val; save(LS.weights,weights);
-      profile.weightKg = val; save(LS.profile,profile);
-      $("#weight").value = val; // reflect in Profile tab
+}
+function renderDayPane(key){
+  const s = statsFor(key);
+  $("#dayKey").textContent = key;
+  $("#calFoodDay").textContent = s.food;
+  $("#calBurnDay").textContent = s.burned;
+  $("#calNetDay").textContent = s.net;
+  $("#foodsDay").innerHTML = s.d.foods.map((f,i)=>`<div class="row muted">
+    <span class="click" data-edit-food-day="${i}">${f.text}</span>
+    <span class="right pill click" data-edit-foodk-day="${i}">${f.kcal} kcal</span>
+    <button class="btn small" data-del-food-day="${i}" type="button">✕</button>
+  </div>`).join("");
+  $("#worksDay").innerHTML = s.d.workouts.map((w,i)=>`<div class="row muted">
+    <span class="click" data-edit-work-day="${i}">${w.text}</span>
+    <span class="right pill click" data-edit-workk-day="${i}">${w.kcal} kcal</span>
+    <button class="btn small" data-del-work-day="${i}" type="button">✕</button>
+  </div>`).join("");
+  $("#stepsDay").textContent = `${s.d.steps} → ${s.step} kcal`;
+
+  document.querySelectorAll("[data-del-food-day]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-del-food-day")); const dd=dayObj(key); dd.foods.splice(i,1); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
+  });
+  document.querySelectorAll("[data-del-work-day]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-del-work-day")); const dd=dayObj(key); dd.workouts.splice(i,1); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
+  });
+  document.querySelectorAll("[data-edit-food-day]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-edit-food-day")); const dd=dayObj(key);
+    const nv=prompt("Edit food text:", dd.foods[i].text); if(nv==null) return;
+    dd.foods[i].text=nv; dd.foods[i].kcal=parseFood(nv); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
+  });
+  document.querySelectorAll("[data-edit-work-day]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-edit-work-day")); const dd=dayObj(key);
+    const nv=prompt("Edit workout text:", dd.workouts[i].text); if(nv==null) return;
+    dd.workouts[i].text=nv; dd.workouts[i].kcal=parseWorkout(nv, profile.weightKg); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
+  });
+  document.querySelectorAll("[data-edit-foodk-day]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-edit-foodk-day")); const dd=dayObj(key);
+    const nv=prompt("Set calories:", dd.foods[i].kcal); if(nv==null) return;
+    dd.foods[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
+  });
+  document.querySelectorAll("[data-edit-workk-day]").forEach(el=>el.onclick=()=>{
+    const i=parseInt(el.getAttribute("data-edit-workk-day")); const dd=dayObj(key);
+    const nv=prompt("Set calories burned:", dd.workouts[i].kcal); if(nv==null) return;
+    dd.workouts[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
+  });
+
+  syncWeightInput();
+}
+
+/* ---------- First render ---------- */
+showTab("dash");
+renderAll();
+renderCalendar();
+renderDayPane(todayKey);
+
+/* ========================= Firebase Auth + Firestore ========================= */
+// Use your actual config (you can keep your values)
+const firebaseConfig = {
+  apiKey: "AIzaSyBB755rLbns2NNSOTVn3K9oj6ODryTxP6E",
+  authDomain: "calorietracker-4adcd.firebaseapp.com",
+  projectId: "calorietracker-4adcd"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+const signInBtn = document.getElementById("signInBtn");
+const signOutBtn = document.getElementById("signOutBtn");
+const userEmailLbl = document.getElementById("userEmail");
+
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const provider = new firebase.auth.GoogleAuthProvider();
+
+signInBtn.addEventListener("click", async () => {
+  try {
+    if (isIOS) await auth.signInWithRedirect(provider);
+    else       await auth.signInWithPopup(provider);
+  } catch (e) {
+    console.error("Sign-in failed:", e);
+    alert("Sign-in failed: " + (e.message || e));
+  }
+});
+signOutBtn.addEventListener("click", async () => {
+  try { await auth.signOut(); } catch (e) {
+    console.error("Sign-out failed:", e);
+    alert("Sign-out failed: " + (e.message || e));
+  }
+});
+
+// Handle redirect result (iOS)
+auth.getRedirectResult().catch(e => {
+  console.error("Redirect result error:", e);
+  // optional alert if you want: alert("Sign-in error: " + (e.message || e));
+});
+
+// Per-user doc paths
+const userDoc = (uid) => db.collection("users").doc(uid);
+const dataDoc = (uid) => userDoc(uid).collection("data").doc("current");
+
+// Load cloud data and merge into local
+async function loadFromCloud(uid) {
+  try {
+    const snap = await dataDoc(uid).get();
+    if (snap.exists) {
+      const data = snap.data() || {};
+      profile = data.profile || profile;
+      goal    = data.goal    || goal;
+      logs    = data.logs    || logs;
+      weights = data.weights || weights;
+      save(LS.profile, profile);
+      save(LS.goal, goal);
+      save(LS.logs, logs);
+      save(LS.weights, weights);
+      // reflect in inputs
+      $("#sex").value = profile.sex; $("#age").value = profile.age;
+      $("#height").value = profile.heightCm; $("#weight").value = profile.weightKg;
+      $("#activity").value = profile.activity;
+      $("#startW").value = goal.startWeightKg; $("#targetW").value = goal.targetWeightKg;
       renderAll(); renderCalendar(); renderDayPane(todayKey);
     }
-  });
-
-  // ---------- Render helpers ----------
-  function statsFor(key){
-    const d = dayObj(key);
-    const food = d.foods.reduce((a,b)=>a+b.kcal,0);
-    const step = stepsToKcal(d.steps, profile.weightKg);
-    const work = d.workouts.reduce((a,b)=>a+b.kcal,0);
-    const burned = step + work + d.burned;
-    const net = food - burned;            // >0 surplus; <0 deficit
-    const balance = burned - food;        // >0 deficit; <0 surplus
-    return { d, food, step, work, burned, net, balance };
+  } catch (e) {
+    console.error("loadFromCloud failed:", e);
   }
+}
 
-  function renderAll(){
-    // ensure profile weight reflects today’s weight if present
-    if (weights[todayKey]!=null) { profile.weightKg = weights[todayKey]; $("#weight").value = profile.weightKg; save(LS.profile,profile); }
-    const bmr=calcBMR(profile), tdee=Math.round(bmr*mult(profile.activity));
-    const s = statsFor(todayKey);
-    $("#todayKey").textContent=todayKey;
-    $("#bmr").textContent=bmr; $("#tdee").textContent=tdee; $("#activityLabel").textContent=profile.activity;
-    $("#bmrMini").textContent=bmr; $("#tdeeMini").textContent=tdee;
-    $("#foodKcal").textContent=s.food; $("#stepsVal").textContent=s.d.steps; $("#stepKcal").textContent=s.step;
-    $("#workoutKcal").textContent=s.work; $("#burnedExtra").textContent=s.d.burned;
-    $("#burnedTotal").textContent=s.burned; $("#netVal").textContent=s.net;
-    $("#stepsTag").textContent=`≈ ${s.step} kcal`;
-    $("#stepsInput").value=s.d.steps; $("#extraInput").value=s.d.burned;
-    $("#kgToGo").textContent=Math.abs(profile.weightKg - goal.targetWeightKg).toFixed(1);
-
-    const moved=goal.startWeightKg - profile.weightKg, total=goal.startWeightKg - goal.targetWeightKg;
-    const pct = total===0?0:Math.max(0,Math.min(100,Math.round((moved/total)*100)));
-    $("#goalPct").textContent=pct+"%"; $("#goalBar").style.width=pct+"%";
-
-    // lists with edit/delete
-    $("#foodList").innerHTML=s.d.foods.map((f,i)=>`
-      <div class="row muted">
-        <span class="click" data-edit-food="${i}">${f.text}</span>
-        <span class="right pill click" data-edit-food-k="${i}">${f.kcal} kcal</span>
-        <button class="btn small" data-del-food="${i}" type="button">✕</button>
-      </div>`).join("");
-    $("#workList").innerHTML=s.d.workouts.map((w,i)=>`
-      <div class="row muted">
-        <span class="click" data-edit-work="${i}">${w.text}</span>
-        <span class="right pill click" data-edit-work-k="${i}">${w.kcal} kcal</span>
-        <button class="btn small" data-del-work="${i}" type="button">✕</button>
-      </div>`).join("");
-
-    // delete/edit handlers
-    document.querySelectorAll("[data-del-food]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-del-food")); const dd=dayObj(todayKey); dd.foods.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
-    });
-    document.querySelectorAll("[data-del-work]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-del-work")); const dd=dayObj(todayKey); dd.workouts.splice(i,1); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
-    });
-    document.querySelectorAll("[data-edit-food]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-edit-food")); const dd=dayObj(todayKey);
-      const nv=prompt("Edit food text:", dd.foods[i].text); if(nv==null) return;
-      dd.foods[i].text=nv; dd.foods[i].kcal=parseFood(nv); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
-    });
-    document.querySelectorAll("[data-edit-work]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-edit-work")); const dd=dayObj(todayKey);
-      const nv=prompt("Edit workout text:", dd.workouts[i].text); if(nv==null) return;
-      dd.workouts[i].text=nv; dd.workouts[i].kcal=parseWorkout(nv, profile.weightKg); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
-    });
-    document.querySelectorAll("[data-edit-food-k]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-edit-food-k")); const dd=dayObj(todayKey);
-      const nv=prompt("Set calories for this food:", dd.foods[i].kcal); if(nv==null) return;
-      dd.foods[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
-    });
-    document.querySelectorAll("[data-edit-work-k]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-edit-work-k")); const dd=dayObj(todayKey);
-      const nv=prompt("Set calories burned for this workout:", dd.workouts[i].kcal); if(nv==null) return;
-      dd.workouts[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[todayKey]=dd; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey);
-    });
-
-    // set today's weight input
-    syncWeightInput();
+// Debounced save to cloud
+let saveTimer=null, currentUid=null;
+function saveToCloudDebounced(){
+  if (!currentUid) return;
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToCloudNow, 1000);
+}
+async function saveToCloudNow(){
+  if (!currentUid) return;
+  try {
+    await dataDoc(currentUid).set(
+      { profile, goal, logs, weights, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
+      { merge: true }
+    );
+  } catch (e) {
+    console.error("saveToCloud failed:", e);
   }
+}
 
-  // ---------- Calendar ----------
-  let calMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-  $("#prevMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()-1, 1); renderCalendar(); };
-  $("#nextMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()+1, 1); renderCalendar(); };
-
-  function renderCalendar(){
-    const y=calMonth.getFullYear(), m=calMonth.getMonth();
-    $("#monLbl").textContent = calMonth.toLocaleString(undefined,{month:"long", year:"numeric"});
-    const grid=$("#calGrid"); grid.innerHTML="";
-    const firstDay = new Date(y,m,1);
-    let startIdx = (firstDay.getDay()+6)%7; // Monday=0 ... Sunday=6
-    const daysInMonth = new Date(y, m+1, 0).getDate();
-    for(let i=0;i<startIdx;i++){ grid.appendChild(document.createElement("div")); }
-    for(let d=1; d<=daysInMonth; d++){
-      const key = fmt(new Date(y,m,d));
-      const s = statsFor(key);
-      const el = document.createElement("div");
-      el.className = "day click";
-      if (key===fmt(selectedDate)) el.classList.add("sel");
-      el.innerHTML = `<div class="dnum">${d}</div>${(s.food||s.burned)?'<span class="dot"></span>':''}`;
-      const dot = el.querySelector(".dot");
-      if(dot){ if (s.balance>0) dot.classList.add("green"); else if (s.balance<0) dot.classList.add("red"); else dot.style.background="var(--gray)"; }
-      el.onclick=()=>{
-        selectedDate = new Date(y,m,d);
-        todayKey = key;
-        showTab("log"); // jump to Daily Log to edit/view
-        renderAll(); renderDayPane(key);
-      };
-      grid.appendChild(el);
-    }
+// Auth state
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    currentUid = user.uid;
+    signInBtn.style.display = "none";
+    signOutBtn.style.display = "inline-block";
+    userEmailLbl.textContent = user.email || "";
+    await loadFromCloud(currentUid);
+  } else {
+    currentUid = null;
+    signInBtn.style.display = "inline-block";
+    signOutBtn.style.display = "none";
+    userEmailLbl.textContent = "";
   }
-
-  function renderDayPane(key){
-    const s = statsFor(key);
-    $("#dayKey").textContent = key;
-    $("#calFoodDay").textContent = s.food;
-    $("#calBurnDay").textContent = s.burned;
-    $("#calNetDay").textContent = s.net;
-    $("#foodsDay").innerHTML = s.d.foods.map((f,i)=>`<div class="row muted">
-      <span class="click" data-edit-food-day="${i}">${f.text}</span>
-      <span class="right pill click" data-edit-foodk-day="${i}">${f.kcal} kcal</span>
-      <button class="btn small" data-del-food-day="${i}" type="button">✕</button>
-    </div>`).join("");
-    $("#worksDay").innerHTML = s.d.workouts.map((w,i)=>`<div class="row muted">
-      <span class="click" data-edit-work-day="${i}">${w.text}</span>
-      <span class="right pill click" data-edit-workk-day="${i}">${w.kcal} kcal</span>
-      <button class="btn small" data-del-work-day="${i}" type="button">✕</button>
-    </div>`).join("");
-    $("#stepsDay").textContent = `${s.d.steps} → ${s.step} kcal`;
-
-    // delete/edit handlers for that day
-    document.querySelectorAll("[data-del-food-day]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-del-food-day")); const dd=dayObj(key); dd.foods.splice(i,1); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar();
-    });
-    document.querySelectorAll("[data-del-work-day]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-del-work-day")); const dd=dayObj(key); dd.workouts.splice(i,1); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar();
-    });
-    document.querySelectorAll("[data-edit-food-day]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-edit-food-day")); const dd=dayObj(key);
-      const nv=prompt("Edit food text:", dd.foods[i].text); if(nv==null) return;
-      dd.foods[i].text=nv; dd.foods[i].kcal=parseFood(nv); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar();
-    });
-    document.querySelectorAll("[data-edit-work-day]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-edit-work-day")); const dd=dayObj(key);
-      const nv=prompt("Edit workout text:", dd.workouts[i].text); if(nv==null) return;
-      dd.workouts[i].text=nv; dd.workouts[i].kcal=parseWorkout(nv, profile.weightKg); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar();
-    });
-    document.querySelectorAll("[data-edit-foodk-day]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-edit-foodk-day")); const dd=dayObj(key);
-      const nv=prompt("Set calories:", dd.foods[i].kcal); if(nv==null) return;
-      dd.foods[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar();
-    });
-    document.querySelectorAll("[data-edit-workk-day]").forEach(el=>el.onclick=()=>{
-      const i=parseInt(el.getAttribute("data-edit-workk-day")); const dd=dayObj(key);
-      const nv=prompt("Set calories burned:", dd.workouts[i].kcal); if(nv==null) return;
-      dd.workouts[i].kcal=Math.max(0, Math.round(parseFloat(nv)||0)); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar();
-    });
-
-    // sync weight input for the selected (todayKey) day
-    syncWeightInput();
-  }
-
-  // ---------- First paint ----------
-  showTab("dash");
-  renderAll();
-  renderCalendar();
-  renderDayPane(todayKey);
+});
 </script>
 </body>
 </html>
-
-
-
