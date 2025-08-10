@@ -6,7 +6,7 @@
 <title>CalTrack (Lite)</title>
 <meta name="theme-color" content="#0f1115" />
 
-<!-- Firebase CDN (safe to keep in <head>) -->
+<!-- Firebase CDN (safe in public repos) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
@@ -15,10 +15,10 @@
   :root { --bg:#0f1115; --card:#171923; --muted:#212433; --text:#e6e6e6; --accent:#5ee0a1; --red:#ff6b6b; --green:#5ee0a1; --gray:#8b8fa3; }
   *{box-sizing:border-box}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-  .wrap{max-width:980px;margin:0 auto;padding:16px; padding-bottom: 48px;}
+  .wrap{max-width:980px;margin:0 auto;padding:16px;padding-bottom:56px;} /* extra bottom padding */
   .grid{display:grid;gap:12px}
   @media (min-width:860px){ .grid-2{grid-template-columns:1fr 1fr} }
-  .card{background:var(--card);border:1px solid #22263a;border-radius:14px;padding:12px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+  .card{background:var(--card);border:1px solid #22263a;border-radius:14px;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
   .muted{background:var(--muted);border-radius:12px;padding:8px 10px;font-size:14px}
   input,select,textarea,button{background:var(--muted);color:var(--text);border:1px solid #2b3048;border-radius:10px;padding:8px 10px;font-size:14px}
@@ -214,7 +214,7 @@
   </section>
 </div>
 
-<!-- ===== MAIN SCRIPT (after HTML so buttons exist) ===== -->
+<!-- ========================== MAIN SCRIPT (after HTML) ========================== -->
 <script>
 /* ---------- Storage ---------- */
 const LS = { profile:"caltrack_profile_v1", goal:"caltrack_goal_v1", logs:"caltrack_logs_v1", weights:"caltrack_weights_v1" };
@@ -261,7 +261,7 @@ document.querySelectorAll(".tabs button").forEach(btn=>{
   btn.addEventListener("click",()=>showTab(btn.dataset.tab));
 });
 
-/* ---------- Profile & Goal bindings ---------- */
+/* ---------- Profile & Goal ---------- */
 $("#sex").value=profile.sex; $("#age").value=profile.age; $("#height").value=profile.heightCm; $("#weight").value=profile.weightKg; $("#activity").value=profile.activity;
 $("#startW").value=goal.startWeightKg; $("#targetW").value=goal.targetWeightKg;
 
@@ -281,7 +281,7 @@ $("#startW").value=goal.startWeightKg; $("#targetW").value=goal.targetWeightKg;
   });
 });
 
-/* ---------- Daily Log events ---------- */
+/* ---------- Daily Log ---------- */
 $("#foodAdd").addEventListener("click",()=>{
   const txt=$("#foodInput").value;
   const items=txt.split(/,|\band\b/ig).map(s=>s.trim()).filter(Boolean).map(c=>({text:c,kcal:parseFood(c)}));
@@ -301,7 +301,7 @@ $("#workClear").addEventListener("click",()=>{ const d=dayObj(todayKey); d.worko
 $("#stepsInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.steps=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced(); });
 $("#extraInput").addEventListener("input",e=>{ const d=dayObj(todayKey); d.burned=Math.max(0,parseInt(e.target.value||"0")); logs[todayKey]=d; save(LS.logs,logs); renderAll(); renderCalendar(); renderDayPane(todayKey); saveToCloudDebounced(); });
 
-/* Today's weight input */
+/* Today's weight */
 const weightToday = $("#weightToday");
 function syncWeightInput(){
   const d = dayObj(todayKey);
@@ -319,15 +319,15 @@ weightToday.addEventListener("input", e=>{
   }
 });
 
-/* ---------- Renderers ---------- */
+/* ---------- Render ---------- */
 function statsFor(key){
   const d = dayObj(key);
   const food = d.foods.reduce((a,b)=>a+b.kcal,0);
   const step = stepsToKcal(d.steps, profile.weightKg);
   const work = d.workouts.reduce((a,b)=>a+b.kcal,0);
   const burned = step + work + d.burned;
-  const net = food - burned;    // >0 surplus; <0 deficit
-  const balance = burned - food;// >0 deficit; <0 surplus
+  const net = food - burned;
+  const balance = burned - food;
   return { d, food, step, work, burned, net, balance };
 }
 function renderAll(){
@@ -393,12 +393,12 @@ function renderAll(){
 
 /* ---------- Calendar ---------- */
 let calMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-$("#prevMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()-1, 1); renderCalendar(); };
-$("#nextMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()+1, 1); renderCalendar(); };
+document.getElementById("prevMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()-1, 1); renderCalendar(); };
+document.getElementById("nextMon").onclick=()=>{ calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth()+1, 1); renderCalendar(); };
 function renderCalendar(){
   const y=calMonth.getFullYear(), m=calMonth.getMonth();
-  $("#monLbl").textContent = calMonth.toLocaleString(undefined,{month:"long", year:"numeric"});
-  const grid=$("#calGrid"); grid.innerHTML="";
+  document.getElementById("monLbl").textContent = calMonth.toLocaleString(undefined,{month:"long", year:"numeric"});
+  const grid=document.getElementById("calGrid"); grid.innerHTML="";
   const firstDay = new Date(y,m,1);
   let startIdx = (firstDay.getDay()+6)%7; // Monday=0 ... Sunday=6
   const daysInMonth = new Date(y, m+1, 0).getDate();
@@ -423,21 +423,21 @@ function renderCalendar(){
 }
 function renderDayPane(key){
   const s = statsFor(key);
-  $("#dayKey").textContent = key;
-  $("#calFoodDay").textContent = s.food;
-  $("#calBurnDay").textContent = s.burned;
-  $("#calNetDay").textContent = s.net;
-  $("#foodsDay").innerHTML = s.d.foods.map((f,i)=>`<div class="row muted">
+  document.getElementById("dayKey").textContent = key;
+  document.getElementById("calFoodDay").textContent = s.food;
+  document.getElementById("calBurnDay").textContent = s.burned;
+  document.getElementById("calNetDay").textContent = s.net;
+  document.getElementById("foodsDay").innerHTML = s.d.foods.map((f,i)=>`<div class="row muted">
     <span class="click" data-edit-food-day="${i}">${f.text}</span>
     <span class="right pill click" data-edit-foodk-day="${i}">${f.kcal} kcal</span>
     <button class="btn small" data-del-food-day="${i}" type="button">✕</button>
   </div>`).join("");
-  $("#worksDay").innerHTML = s.d.workouts.map((w,i)=>`<div class="row muted">
+  document.getElementById("worksDay").innerHTML = s.d.workouts.map((w,i)=>`<div class="row muted">
     <span class="click" data-edit-work-day="${i}">${w.text}</span>
     <span class="right pill click" data-edit-workk-day="${i}">${w.kcal} kcal</span>
     <button class="btn small" data-del-work-day="${i}" type="button">✕</button>
   </div>`).join("");
-  $("#stepsDay").textContent = `${s.d.steps} → ${s.step} kcal`;
+  document.getElementById("stepsDay").textContent = `${s.d.steps} → ${s.step} kcal`;
 
   document.querySelectorAll("[data-del-food-day]").forEach(el=>el.onclick=()=>{
     const i=parseInt(el.getAttribute("data-del-food-day")); const dd=dayObj(key); dd.foods.splice(i,1); logs[key]=dd; save(LS.logs,logs); renderDayPane(key); renderAll(); renderCalendar(); saveToCloudDebounced();
@@ -469,30 +469,35 @@ function renderDayPane(key){
   syncWeightInput();
 }
 
-/* ---------- First render ---------- */
+/* ---------- First paint ---------- */
 showTab("dash");
 renderAll();
 renderCalendar();
 renderDayPane(todayKey);
 
 /* ========================= Firebase Auth + Firestore ========================= */
-// Use your actual config (you can keep your values)
+/* Replace messagingSenderId + appId with your real values from Firebase console */
 const firebaseConfig = {
   apiKey: "AIzaSyBB755rLbns2NNSOTVn3K9oj6ODryTxP6E",
   authDomain: "calorietracker-4adcd.firebaseapp.com",
-  projectId: "calorietracker-4adcd"
+  projectId: "calorietracker-4adcd",
+  storageBucket: "calorietracker-4adcd.appspot.com",
+  messagingSenderId: "732794700310", /* <-- replace */
+  appId: "1:732794700310:web:898e2d7377f68b1ac92b37" /* <-- replace */
 };
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.firestore();
 
-const signInBtn = document.getElementById("signInBtn");
-const signOutBtn = document.getElementById("signOutBtn");
-const userEmailLbl = document.getElementById("userEmail");
-
+/* iOS uses redirect; desktop uses popup */
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const provider = new firebase.auth.GoogleAuthProvider();
+
+/* Elements exist now, safe to bind */
+const signInBtn = document.getElementById("signInBtn");
+const signOutBtn = document.getElementById("signOutBtn");
+const userEmailLbl = document.getElementById("userEmail");
 
 signInBtn.addEventListener("click", async () => {
   try {
@@ -510,17 +515,14 @@ signOutBtn.addEventListener("click", async () => {
   }
 });
 
-// Handle redirect result (iOS)
-auth.getRedirectResult().catch(e => {
-  console.error("Redirect result error:", e);
-  // optional alert if you want: alert("Sign-in error: " + (e.message || e));
-});
+/* Handle iOS redirect result (won't throw on success) */
+auth.getRedirectResult().catch(e => console.error("Redirect result error:", e));
 
-// Per-user doc paths
+/* Per-user doc helpers */
 const userDoc = (uid) => db.collection("users").doc(uid);
 const dataDoc = (uid) => userDoc(uid).collection("data").doc("current");
 
-// Load cloud data and merge into local
+/* Cloud load/save */
 async function loadFromCloud(uid) {
   try {
     const snap = await dataDoc(uid).get();
@@ -530,23 +532,21 @@ async function loadFromCloud(uid) {
       goal    = data.goal    || goal;
       logs    = data.logs    || logs;
       weights = data.weights || weights;
+
       save(LS.profile, profile);
       save(LS.goal, goal);
       save(LS.logs, logs);
       save(LS.weights, weights);
-      // reflect in inputs
+
       $("#sex").value = profile.sex; $("#age").value = profile.age;
       $("#height").value = profile.heightCm; $("#weight").value = profile.weightKg;
       $("#activity").value = profile.activity;
       $("#startW").value = goal.startWeightKg; $("#targetW").value = goal.targetWeightKg;
+
       renderAll(); renderCalendar(); renderDayPane(todayKey);
     }
-  } catch (e) {
-    console.error("loadFromCloud failed:", e);
-  }
+  } catch (e) { console.error("loadFromCloud failed:", e); }
 }
-
-// Debounced save to cloud
 let saveTimer=null, currentUid=null;
 function saveToCloudDebounced(){
   if (!currentUid) return;
@@ -560,12 +560,13 @@ async function saveToCloudNow(){
       { profile, goal, logs, weights, updatedAt: firebase.firestore.FieldValue.serverTimestamp() },
       { merge: true }
     );
-  } catch (e) {
-    console.error("saveToCloud failed:", e);
-  }
+  } catch (e) { console.error("saveToCloud failed:", e); }
 }
 
-// Auth state
+/* Persist across sessions */
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+
+/* Auth state listener */
 auth.onAuthStateChanged(async (user) => {
   if (user) {
     currentUid = user.uid;
@@ -583,4 +584,3 @@ auth.onAuthStateChanged(async (user) => {
 </script>
 </body>
 </html>
-
