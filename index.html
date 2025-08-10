@@ -501,13 +501,18 @@ const userEmailLbl = document.getElementById("userEmail");
 
 signInBtn.addEventListener("click", async () => {
   try {
-    if (isIOS) await auth.signInWithRedirect(provider);
-    else       await auth.signInWithPopup(provider);
+    if (isIOS) {
+      sessionStorage.setItem("afterSignIn", "1");   // <-- add
+      await auth.signInWithRedirect(provider);
+    } else {
+      await auth.signInWithPopup(provider);
+    }
   } catch (e) {
     console.error("Sign-in failed:", e);
     alert("Sign-in failed: " + (e.message || e));
   }
 });
+
 signOutBtn.addEventListener("click", async () => {
   try { await auth.signOut(); } catch (e) {
     console.error("Sign-out failed:", e);
@@ -516,7 +521,44 @@ signOutBtn.addEventListener("click", async () => {
 });
 
 /* Handle iOS redirect result (won't throw on success) */
-auth.getRedirectResult().catch(e => console.error("Redirect result error:", e));
+// Handle redirect (iOS) and force a one-time refresh so UI updates reliably
+auth.getRedirectResult()
+  .then(async (res) => {
+    // If Google returned a user, we can update immediately
+    if (res && res.user) {
+      // Clear OAuth query params from the URL (optional, keeps URL clean)
+      if (location.search || location.hash) {
+        history.replaceState(null, "", location.pathname);
+      }
+      // Load cloud data now (no need to wait for onAuthStateChanged)
+      const u = res.user;
+      currentUid = u.uid;
+      signInBtn.style.display = "none";
+      signOutBtn.style.display = "inline-block";
+      userEmailLbl.textContent = u.email || "";
+      await loadFromCloud(u.uid);
+
+      // If we just came from a redirect, do a one-time refresh to stabilize iOS state
+      if (sessionStorage.getItem("afterSignIn") === "1") {
+        sessionStorage.removeItem("afterSignIn");
+        // Use replace so we don't add an extra history entry
+        location.replace(location.pathname);
+      }
+    } else {
+      // No res.user (could be returning from redirect but already had a session)
+      if (sessionStorage.getItem("afterSignIn") === "1" && auth.currentUser) {
+        sessionStorage.removeItem("afterSignIn");
+        location.replace(location.pathname);
+      }
+    }
+  })
+  .catch((e) => {
+    console.error("Redirect result error:", e);
+    sessionStorage.removeItem("afterSignIn"); // don’t get stuck
+  });
+
+
+
 
 /* Per-user doc helpers */
 const userDoc = (uid) => db.collection("users").doc(uid);
@@ -584,3 +626,4 @@ auth.onAuthStateChanged(async (user) => {
 </script>
 </body>
 </html>
+
