@@ -268,21 +268,38 @@ const parseWorkout=(t,kg)=>{t=(t||"").toLowerCase();const k=Object.keys(EX_MET).
 const stepsToKcal=(steps,kg)=>Math.round(((3.3*3.5*kg)/200)*((steps||0)/100));
 const dayObj=k=>logs[k]||{foods:[],workouts:[],steps:0,burned:0};
 
-/* ---------- Tabs ---------- */
+/* ---------- Tabs (only dash + calendar) ---------- */
 function showTab(name){
+  // show exactly one section
   ["dash","calendar"].forEach(id=>{
-    const el=document.getElementById(id);
+    const el = document.getElementById(id);
     if(!el) return;
     if(id===name){ el.removeAttribute("hidden"); }
     else { el.setAttribute("hidden",""); }
   });
+
+  // update button highlight
   document.querySelectorAll(".tabs button").forEach(b=>b.setAttribute("aria-selected","false"));
-  document.querySelector(`.tabs button[data-tab="${name}"]`)?.setAttribute("aria-selected","true");
-  if(name==="calendar"){ renderCalendar(); syncGoalCardCal(); }
+  const btn = document.querySelector(`.tabs button[data-tab="${name}"]`);
+  if (btn) btn.setAttribute("aria-selected","true");
+
+  // view-specific renders
+  if(name==="calendar"){
+    renderCalendar();   // paint the month
+    syncGoalCardCal();  // update the goal card on the calendar view
+  } else if (name==="dash"){
+    renderAll();        // refresh today summary & lists
+  }
 }
+
+// attach click handlers AFTER the DOM exists
 document.querySelectorAll(".tabs button").forEach(btn=>{
-  btn.addEventListener("click",()=>showTab(btn.dataset.tab));
+  btn.addEventListener("click",()=> showTab(btn.dataset.tab));
 });
+
+// first paint goes to dashboard
+showTab("dash");
+
 
 /* ---------- Profile & Goal prefill ---------- */
 $("#sex").value=profile.sex; $("#age").value=profile.age; $("#height").value=profile.heightCm; $("#weight").value=profile.weightKg; $("#activity").value=profile.activity;
@@ -677,3 +694,4 @@ auth.onAuthStateChanged(async (user) => {
 </script>
 </body>
 </html>
+
